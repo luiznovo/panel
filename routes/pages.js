@@ -53,6 +53,39 @@ async function setupRoutes() {
                                 instances.push(instanceData);
                             }
                         }
+                        
+                        // Get user plan information
+                        const userPlan = authenticatedUser.plan || 'Gratuito';
+                        const plans = {
+                            'Gratuito': { projects: 1, ram: 512, storage: 1 },
+                            'Iniciante': { projects: 5, ram: 3072, storage: 9 },
+                            'Intermediário': { projects: 15, ram: 10240, storage: 20 },
+                            'Super': { projects: 30, ram: 20480, storage: 30 }
+                        };
+                        
+                        // Calculate current usage
+                        const currentRamUsage = instances.reduce((total, instance) => total + (instance.ramUsage || 0), 0);
+                        const currentStorageUsage = instances.reduce((total, instance) => total + (instance.storageUsage || 0), 0);
+                        
+                        const planData = {
+                            current: userPlan,
+                            limits: plans[userPlan],
+                            usage: {
+                                projects: instances.length,
+                                ram: currentRamUsage,
+                                storage: currentStorageUsage
+                            },
+                            available: {
+                                projects: Math.max(0, plans[userPlan].projects - instances.length),
+                                ram: Math.max(0, plans[userPlan].ram - currentRamUsage),
+                                storage: Math.max(0, plans[userPlan].storage - currentStorageUsage)
+                            },
+                            allPlans: plans
+                        };
+                        
+                        // Get available nodes and images for project creation
+                        const nodes = await db.get('nodes') || [];
+                        const images = await db.get('images') || [];
                 
                         res.render(page.template, { 
                             req, 
@@ -62,7 +95,10 @@ async function setupRoutes() {
                             settings: await db.get('settings'),
                             config, 
                             instances, 
-                            adminInstances
+                            adminInstances,
+                            planData,
+                            nodes,
+                            images
                         });
                     } catch (error) {
                         console.error('Error fetching subuser instances:', error);

@@ -823,4 +823,186 @@ async function checkNodeStatus(node) {
     }
 }
 
+// Route to change user plan
+router.post('/api/change-plan', async (req, res) => {
+    try {
+        if (!req.user) {
+            return res.status(401).json({ success: false, message: 'Não autenticado' });
+        }
+
+        const { plan } = req.body;
+        const validPlans = ['Gratuito', 'Iniciante', 'Intermediário', 'Super'];
+        
+        if (!validPlans.includes(plan)) {
+            return res.status(400).json({ success: false, message: 'Plano inválido' });
+        }
+
+        const users = await db.get('users') || [];
+        const userIndex = users.findIndex(user => user.userId === req.user.userId);
+        
+        if (userIndex === -1) {
+            return res.status(404).json({ success: false, message: 'Usuário não encontrado' });
+        }
+
+        users[userIndex].plan = plan;
+        await db.set('users', users);
+
+        res.json({ success: true, message: 'Plano alterado com sucesso' });
+    } catch (error) {
+        console.error('Error changing plan:', error);
+        res.status(500).json({ success: false, message: 'Erro interno do servidor' });
+    }
+});
+
+// Route to create new project
+router.post('/api/create-project', async (req, res) => {
+    try {
+        if (!req.user) {
+            return res.status(401).json({ success: false, message: 'Não autenticado' });
+        }
+
+        const { name, description, image, ram, storage, node } = req.body;
+        
+        // Validate required fields
+        if (!name || !image || !ram || !storage || !node) {
+            return res.status(400).json({ success: false, message: 'Campos obrigatórios não preenchidos' });
+        }
+
+        // Get user plan limits
+        const plans = {
+            'Gratuito': { projects: 1, ram: 512, storage: 1 },
+            'Iniciante': { projects: 5, ram: 3072, storage: 9 },
+            'Intermediário': { projects: 15, ram: 10240, storage: 20 },
+            'Super': { projects: 30, ram: 20480, storage: 30 }
+        };
+        
+        const userPlan = req.user.plan || 'Gratuito';
+        const planLimits = plans[userPlan];
+        
+        // Get user's current instances
+        const userInstances = await db.get(req.user.userId + '_instances') || [];
+        
+        // Check project limit
+        if (userInstances.length >= planLimits.projects) {
+            return res.status(400).json({ 
+                success: false, 
+                message: `Limite de projetos atingido. Seu plano ${userPlan} permite ${planLimits.projects} projeto(s).` 
+            });
+        }
+        
+        // Calculate current resource usage
+        const currentRamUsage = userInstances.reduce((total, instance) => total + (instance.ramUsage || 0), 0);
+        const currentStorageUsage = userInstances.reduce((total, instance) => total + (instance.storageUsage || 0), 0);
+        
+        // Check RAM limit
+        if (currentRamUsage + ram > planLimits.ram) {
+            return res.status(400).json({ 
+                success: false, 
+                message: `RAM insuficiente. Disponível: ${planLimits.ram - currentRamUsage}MB, solicitado: ${ram}MB` 
+            });
+        }
+        
+        // Check storage limit
+        if (currentStorageUsage + storage > planLimits.storage) {
+            return res.status(400).json({ 
+                success: false, 
+                message: `Armazenamento insuficiente. Disponível: ${planLimits.storage - currentStorageUsage}GB, solicitado: ${storage}GB` 
+            });
+        }
+
+        // Validate project name
+        if (!/^[a-zA-Z0-9-_]+$/.test(name)) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Nome do projeto deve conter apenas letras, números, hífens e underscores' 
+            });
+        }
+
+        // Get node information
+        const nodeData = await db.get(node + '_node');
+        if (!nodeData) {
+            return res.status(400).json({ success: false, message: 'Node não encontrado' });
+        }
+
+        // Get image information
+        const images = await db.get('images') || [];
+        const imageData = images.find(img => img.Name === image);
+        if (!imageData) {
+            return res.status(400).json({ success: false, message: 'Imagem não encontrada' });
+        }
+
+        // Generate instance ID
+        const instanceId = uuidv4();
+        
+        // Create instance data
+        const instanceData = {
+            Id: instanceId,
+            Name: name,
+            Description: description || '',
+            User: req.user.userId,
+            Node: node,
+            Image: image,
+            Memory: ram,
+            Disk: storage * 1024, // Convert GB to MB
+            Cpu: Math.min(100, Math.floor(ram / 256) * 25), // Auto-calculate CPU based on RAM
+            Ports: [],
+            Primary: null,
+            Variables: {},
+            ramUsage: ram,
+            storageUsage: storage,
+            createdAt: new Date().toISOString(),
+            status: 'creating'
+        };
+
+        // Save instance to user's instances
+        userInstances.push(instanceData);
+        await db.set(req.user.userId + '_instances', userInstances);
+        
+        // Also save to global instances list
+        const allInstances = await db.get('instances') || [];
+        allInstances.push(instanceData);
+        await db.set('instances', allInstances);
+        
+        // Save individual instance data
+        await db.set(instanceId + '_instance', instanceData);
+
+        // Here you would typically make an API call to the node to actually create the container
+        // For now, we'll just mark it as created
+        setTimeout(async () => {
+            try {
+                const updatedInstance = { ...instanceData, status: 'running' };
+                await db.set(instanceId + '_instance', updatedInstance);
+                
+                // Update in user instances
+                const userInst = await db.get(req.user.userId + '_instances') || [];
+                const instIndex = userInst.findIndex(inst => inst.Id === instanceId);
+                if (instIndex !== -1) {
+                    userInst[instIndex] = updatedInstance;
+                    await db.set(req.user.userId + '_instances', userInst);
+                }
+                
+                // Update in global instances
+                const allInst = await db.get('instances') || [];
+                const globalIndex = allInst.findIndex(inst => inst.Id === instanceId);
+                if (globalIndex !== -1) {
+                    allInst[globalIndex] = updatedInstance;
+                    await db.set('instances', allInst);
+                }
+            } catch (error) {
+                console.error('Error updating instance status:', error);
+            }
+        }, 3000);
+
+        res.json({ 
+            success: true, 
+            message: 'Projeto criado com sucesso', 
+            instanceId: instanceId 
+        });
+        
+    } catch (error) {
+        console.error('Error creating project:', error);
+        res.status(500).json({ success: false, message: 'Erro interno do servidor' });
+    }
+});
+
 module.exports = router;

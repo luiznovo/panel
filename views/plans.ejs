@@ -1,0 +1,287 @@
+<%- include('components/template') %>
+<main class="container flex-grow px-4 py-8 mx-auto animate-fade-in md:px-6 lg:px-8">
+  <!-- Header Section -->
+  <div class="flex flex-col justify-between w-full pb-8 gap-6 sm:flex-row sm:items-center sm:gap-0">
+    <div class="space-y-1">
+      <h1 class="text-3xl font-bold text-white tracking-tight">Planos de Hospedagem</h1>
+      <p class="text-gray-400 text-md">Escolha o plano ideal para seus projetos</p>
+    </div>
+    <div class="flex items-center gap-3">
+      <a href="/instances" class="px-4 py-2.5 text-sm font-medium text-white transition-all duration-200 bg-gray-700 hover:bg-gray-600 rounded-lg">
+        Voltar para Instâncias
+      </a>
+    </div>
+  </div>
+
+  <!-- Current Plan Section -->
+  <div class="mb-8 p-6 bg-gradient-to-r from-indigo-600/20 to-purple-600/20 rounded-xl border border-indigo-500/30">
+    <div class="flex items-center justify-between">
+      <div>
+        <h2 class="text-xl font-semibold text-white mb-2">Seu Plano Atual</h2>
+        <p class="text-lg text-indigo-300 font-medium"><%= user.plan || 'Gratuito' %></p>
+        <div class="mt-3 space-y-1 text-sm text-gray-300">
+          <% 
+            const plans = {
+              'Gratuito': { projects: 1, ram: 512, storage: 1 },
+              'Iniciante': { projects: 5, ram: 3072, storage: 9 },
+              'Intermediário': { projects: 15, ram: 10240, storage: 20 },
+              'Super': { projects: 30, ram: 20480, storage: 30 }
+            };
+            const currentPlan = plans[user.plan || 'Gratuito'];
+            const usedProjects = instances ? instances.length : 0;
+            const usedRam = instances ? instances.reduce((total, instance) => total + (instance.ramUsage || 0), 0) : 0;
+            const usedStorage = instances ? instances.reduce((total, instance) => total + (instance.storageUsage || 0), 0) : 0;
+          %>
+          <div class="flex justify-between">
+            <span>Projetos:</span>
+            <span><%= usedProjects %>/<%= currentPlan.projects %></span>
+          </div>
+          <div class="flex justify-between">
+            <span>RAM:</span>
+            <span><%= Math.round(usedRam) %>MB/<%= currentPlan.ram %>MB</span>
+          </div>
+          <div class="flex justify-between">
+            <span>Armazenamento:</span>
+            <span><%= Math.round(usedStorage) %>GB/<%= currentPlan.storage %>GB</span>
+          </div>
+        </div>
+      </div>
+      <div class="text-right">
+        <div class="text-2xl font-bold text-white">R$ <%= user.plan === 'Gratuito' ? '0' : user.plan === 'Iniciante' ? '29,90' : user.plan === 'Intermediário' ? '79,90' : '149,90' %></div>
+        <div class="text-sm text-gray-400">/mês</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Plans Grid -->
+  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+    <!-- Plano Gratuito -->
+    <div class="relative p-6 bg-gray-800/50 rounded-xl border border-gray-700 hover:border-gray-600 transition-all duration-200 <%= user.plan === 'Gratuito' ? 'ring-2 ring-indigo-500' : '' %>">
+      <% if (user.plan === 'Gratuito') { %>
+        <div class="absolute -top-3 left-1/2 transform -translate-x-1/2">
+          <span class="bg-indigo-500 text-white px-3 py-1 rounded-full text-xs font-medium">Plano Atual</span>
+        </div>
+      <% } %>
+      <div class="text-center">
+        <h3 class="text-xl font-semibold text-white mb-2">Gratuito</h3>
+        <div class="text-3xl font-bold text-white mb-4">R$ 0<span class="text-lg text-gray-400">/mês</span></div>
+        <ul class="space-y-3 text-sm text-gray-300 mb-6">
+          <li class="flex items-center">
+            <svg class="w-4 h-4 text-green-400 mr-2" fill="currentColor" viewBox="0 0 20 20">
+              <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+            </svg>
+            1 projeto
+          </li>
+          <li class="flex items-center">
+            <svg class="w-4 h-4 text-green-400 mr-2" fill="currentColor" viewBox="0 0 20 20">
+              <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+            </svg>
+            512MB de RAM
+          </li>
+          <li class="flex items-center">
+            <svg class="w-4 h-4 text-green-400 mr-2" fill="currentColor" viewBox="0 0 20 20">
+              <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+            </svg>
+            1GB de armazenamento
+          </li>
+        </ul>
+        <% if (user.plan !== 'Gratuito') { %>
+          <button class="w-full px-4 py-2 text-sm font-medium text-white bg-gray-600 hover:bg-gray-500 rounded-lg transition-colors" onclick="changePlan('Gratuito')">Alterar para este plano</button>
+        <% } else { %>
+          <button class="w-full px-4 py-2 text-sm font-medium text-gray-400 bg-gray-700 rounded-lg cursor-not-allowed" disabled>Plano Atual</button>
+        <% } %>
+      </div>
+    </div>
+
+    <!-- Plano Iniciante -->
+    <div class="relative p-6 bg-gray-800/50 rounded-xl border border-gray-700 hover:border-gray-600 transition-all duration-200 <%= user.plan === 'Iniciante' ? 'ring-2 ring-indigo-500' : '' %>">
+      <% if (user.plan === 'Iniciante') { %>
+        <div class="absolute -top-3 left-1/2 transform -translate-x-1/2">
+          <span class="bg-indigo-500 text-white px-3 py-1 rounded-full text-xs font-medium">Plano Atual</span>
+        </div>
+      <% } %>
+      <div class="text-center">
+        <h3 class="text-xl font-semibold text-white mb-2">Iniciante</h3>
+        <div class="text-3xl font-bold text-white mb-4">R$ 29,90<span class="text-lg text-gray-400">/mês</span></div>
+        <ul class="space-y-3 text-sm text-gray-300 mb-6">
+          <li class="flex items-center">
+            <svg class="w-4 h-4 text-green-400 mr-2" fill="currentColor" viewBox="0 0 20 20">
+              <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+            </svg>
+            5 projetos
+          </li>
+          <li class="flex items-center">
+            <svg class="w-4 h-4 text-green-400 mr-2" fill="currentColor" viewBox="0 0 20 20">
+              <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+            </svg>
+            3GB de RAM
+          </li>
+          <li class="flex items-center">
+            <svg class="w-4 h-4 text-green-400 mr-2" fill="currentColor" viewBox="0 0 20 20">
+              <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+            </svg>
+            9GB de armazenamento
+          </li>
+        </ul>
+        <% if (user.plan !== 'Iniciante') { %>
+          <button class="w-full px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg transition-colors" onclick="changePlan('Iniciante')">Alterar para este plano</button>
+        <% } else { %>
+          <button class="w-full px-4 py-2 text-sm font-medium text-gray-400 bg-gray-700 rounded-lg cursor-not-allowed" disabled>Plano Atual</button>
+        <% } %>
+      </div>
+    </div>
+
+    <!-- Plano Intermediário -->
+    <div class="relative p-6 bg-gray-800/50 rounded-xl border border-gray-700 hover:border-gray-600 transition-all duration-200 <%= user.plan === 'Intermediário' ? 'ring-2 ring-indigo-500' : '' %>">
+      <% if (user.plan === 'Intermediário') { %>
+        <div class="absolute -top-3 left-1/2 transform -translate-x-1/2">
+          <span class="bg-indigo-500 text-white px-3 py-1 rounded-full text-xs font-medium">Plano Atual</span>
+        </div>
+      <% } %>
+      <div class="text-center">
+        <h3 class="text-xl font-semibold text-white mb-2">Intermediário</h3>
+        <div class="text-3xl font-bold text-white mb-4">R$ 79,90<span class="text-lg text-gray-400">/mês</span></div>
+        <ul class="space-y-3 text-sm text-gray-300 mb-6">
+          <li class="flex items-center">
+            <svg class="w-4 h-4 text-green-400 mr-2" fill="currentColor" viewBox="0 0 20 20">
+              <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+            </svg>
+            15 projetos
+          </li>
+          <li class="flex items-center">
+            <svg class="w-4 h-4 text-green-400 mr-2" fill="currentColor" viewBox="0 0 20 20">
+              <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+            </svg>
+            10GB de RAM
+          </li>
+          <li class="flex items-center">
+            <svg class="w-4 h-4 text-green-400 mr-2" fill="currentColor" viewBox="0 0 20 20">
+              <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+            </svg>
+            20GB de armazenamento
+          </li>
+        </ul>
+        <% if (user.plan !== 'Intermediário') { %>
+          <button class="w-full px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg transition-colors" onclick="changePlan('Intermediário')">Alterar para este plano</button>
+        <% } else { %>
+          <button class="w-full px-4 py-2 text-sm font-medium text-gray-400 bg-gray-700 rounded-lg cursor-not-allowed" disabled>Plano Atual</button>
+        <% } %>
+      </div>
+    </div>
+
+    <!-- Plano Super -->
+    <div class="relative p-6 bg-gray-800/50 rounded-xl border border-gray-700 hover:border-gray-600 transition-all duration-200 <%= user.plan === 'Super' ? 'ring-2 ring-indigo-500' : '' %>">
+      <% if (user.plan === 'Super') { %>
+        <div class="absolute -top-3 left-1/2 transform -translate-x-1/2">
+          <span class="bg-indigo-500 text-white px-3 py-1 rounded-full text-xs font-medium">Plano Atual</span>
+        </div>
+      <% } %>
+      <div class="text-center">
+        <h3 class="text-xl font-semibold text-white mb-2">Super</h3>
+        <div class="text-3xl font-bold text-white mb-4">R$ 149,90<span class="text-lg text-gray-400">/mês</span></div>
+        <ul class="space-y-3 text-sm text-gray-300 mb-6">
+          <li class="flex items-center">
+            <svg class="w-4 h-4 text-green-400 mr-2" fill="currentColor" viewBox="0 0 20 20">
+              <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+            </svg>
+            30 projetos
+          </li>
+          <li class="flex items-center">
+            <svg class="w-4 h-4 text-green-400 mr-2" fill="currentColor" viewBox="0 0 20 20">
+              <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+            </svg>
+            20GB de RAM
+          </li>
+          <li class="flex items-center">
+            <svg class="w-4 h-4 text-green-400 mr-2" fill="currentColor" viewBox="0 0 20 20">
+              <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+            </svg>
+            30GB de armazenamento
+          </li>
+        </ul>
+        <% if (user.plan !== 'Super') { %>
+          <button class="w-full px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg transition-colors" onclick="changePlan('Super')">Alterar para este plano</button>
+        <% } else { %>
+          <button class="w-full px-4 py-2 text-sm font-medium text-gray-400 bg-gray-700 rounded-lg cursor-not-allowed" disabled>Plano Atual</button>
+        <% } %>
+      </div>
+    </div>
+  </div>
+
+  <!-- Features Comparison -->
+  <div class="mt-12 p-6 bg-gray-800/30 rounded-xl border border-gray-700">
+    <h3 class="text-xl font-semibold text-white mb-4">Comparação de Recursos</h3>
+    <div class="overflow-x-auto">
+      <table class="min-w-full">
+        <thead>
+          <tr class="border-b border-gray-700">
+            <th class="text-left py-3 px-4 text-gray-300">Recurso</th>
+            <th class="text-center py-3 px-4 text-gray-300">Gratuito</th>
+            <th class="text-center py-3 px-4 text-gray-300">Iniciante</th>
+            <th class="text-center py-3 px-4 text-gray-300">Intermediário</th>
+            <th class="text-center py-3 px-4 text-gray-300">Super</th>
+          </tr>
+        </thead>
+        <tbody class="text-sm">
+          <tr class="border-b border-gray-700/50">
+            <td class="py-3 px-4 text-white">Projetos</td>
+            <td class="text-center py-3 px-4 text-gray-300">1</td>
+            <td class="text-center py-3 px-4 text-gray-300">5</td>
+            <td class="text-center py-3 px-4 text-gray-300">15</td>
+            <td class="text-center py-3 px-4 text-gray-300">30</td>
+          </tr>
+          <tr class="border-b border-gray-700/50">
+            <td class="py-3 px-4 text-white">RAM</td>
+            <td class="text-center py-3 px-4 text-gray-300">512MB</td>
+            <td class="text-center py-3 px-4 text-gray-300">3GB</td>
+            <td class="text-center py-3 px-4 text-gray-300">10GB</td>
+            <td class="text-center py-3 px-4 text-gray-300">20GB</td>
+          </tr>
+          <tr class="border-b border-gray-700/50">
+            <td class="py-3 px-4 text-white">Armazenamento</td>
+            <td class="text-center py-3 px-4 text-gray-300">1GB</td>
+            <td class="text-center py-3 px-4 text-gray-300">9GB</td>
+            <td class="text-center py-3 px-4 text-gray-300">20GB</td>
+            <td class="text-center py-3 px-4 text-gray-300">30GB</td>
+          </tr>
+          <tr>
+            <td class="py-3 px-4 text-white">Suporte</td>
+            <td class="text-center py-3 px-4 text-gray-300">Comunidade</td>
+            <td class="text-center py-3 px-4 text-gray-300">Email</td>
+            <td class="text-center py-3 px-4 text-gray-300">Email + Chat</td>
+            <td class="text-center py-3 px-4 text-gray-300">Prioritário</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</main>
+
+<script>
+function changePlan(planName) {
+  if (confirm(`Tem certeza que deseja alterar para o plano ${planName}?`)) {
+    fetch('/api/change-plan', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ plan: planName })
+    })
+    .then(response => response.json())
+    .then(data => {
+      if (data.success) {
+        alert('Plano alterado com sucesso!');
+        window.location.reload();
+      } else {
+        alert('Erro ao alterar plano: ' + data.message);
+      }
+    })
+    .catch(error => {
+      console.error('Error:', error);
+      alert('Erro ao alterar plano.');
+    });
+  }
+}
+</script>
+
+<%- include('components/footer') %>

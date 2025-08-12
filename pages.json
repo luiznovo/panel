@@ -3,6 +3,16 @@
         "path": "/login",
         "template": "auth/login",
         "requiresAuth": false
+    },
+    {
+        "path": "/plans",
+        "template": "plans",
+        "requiresAuth": true
+    },
+    {
+        "path": "/create-project",
+        "template": "create-project",
+        "requiresAuth": true
     }
 ]
 

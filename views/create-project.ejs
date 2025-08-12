@@ -1,0 +1,295 @@
+<%- include('components/template') %>
+<main class="container flex-grow px-4 py-8 mx-auto animate-fade-in md:px-6 lg:px-8">
+  <!-- Header Section -->
+  <div class="flex flex-col justify-between w-full pb-8 gap-6 sm:flex-row sm:items-center sm:gap-0">
+    <div class="space-y-1">
+      <h1 class="text-3xl font-bold text-white tracking-tight">Criar Novo Projeto</h1>
+      <p class="text-gray-400 text-md">Configure seu novo projeto de hospedagem</p>
+    </div>
+    <div class="flex items-center gap-3">
+      <a href="/instances" class="px-4 py-2.5 text-sm font-medium text-white transition-all duration-200 bg-gray-700 hover:bg-gray-600 rounded-lg">
+        Voltar para Instâncias
+      </a>
+    </div>
+  </div>
+
+  <!-- Plan Limits Info -->
+  <div class="mb-8 p-6 bg-gradient-to-r from-indigo-600/20 to-purple-600/20 rounded-xl border border-indigo-500/30">
+    <h2 class="text-xl font-semibold text-white mb-4">Limites do Seu Plano</h2>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <% 
+        const plans = {
+          'Gratuito': { projects: 1, ram: 512, storage: 1 },
+          'Iniciante': { projects: 5, ram: 3072, storage: 9 },
+          'Intermediário': { projects: 15, ram: 10240, storage: 20 },
+          'Super': { projects: 30, ram: 20480, storage: 30 }
+        };
+        const currentPlan = plans[user.plan || 'Gratuito'];
+        const usedProjects = instances ? instances.length : 0;
+        const usedRam = instances ? instances.reduce((total, instance) => total + (instance.ramUsage || 0), 0) : 0;
+        const usedStorage = instances ? instances.reduce((total, instance) => total + (instance.storageUsage || 0), 0) : 0;
+        const availableRam = currentPlan.ram - usedRam;
+        const availableStorage = currentPlan.storage - usedStorage;
+      %>
+      <div class="bg-gray-800/50 p-4 rounded-lg">
+        <div class="text-sm text-gray-400 mb-1">Projetos</div>
+        <div class="text-lg font-semibold text-white"><%= usedProjects %>/<%= currentPlan.projects %></div>
+        <% if (usedProjects >= currentPlan.projects) { %>
+          <div class="text-xs text-red-400 mt-1">Limite atingido</div>
+        <% } %>
+      </div>
+      <div class="bg-gray-800/50 p-4 rounded-lg">
+        <div class="text-sm text-gray-400 mb-1">RAM Disponível</div>
+        <div class="text-lg font-semibold text-white"><%= Math.max(0, availableRam) %>MB</div>
+        <div class="text-xs text-gray-400 mt-1">de <%= currentPlan.ram %>MB total</div>
+      </div>
+      <div class="bg-gray-800/50 p-4 rounded-lg">
+        <div class="text-sm text-gray-400 mb-1">Armazenamento Disponível</div>
+        <div class="text-lg font-semibold text-white"><%= Math.max(0, availableStorage) %>GB</div>
+        <div class="text-xs text-gray-400 mt-1">de <%= currentPlan.storage %>GB total</div>
+      </div>
+    </div>
+    
+    <% if (usedProjects >= currentPlan.projects) { %>
+      <div class="mt-4 p-4 bg-red-500/20 border border-red-500/30 rounded-lg">
+        <div class="flex items-center">
+          <svg class="w-5 h-5 text-red-400 mr-2" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+          </svg>
+          <span class="text-red-300">Você atingiu o limite de projetos do seu plano. <a href="/plans" class="text-red-200 underline hover:text-red-100">Faça upgrade</a> para criar mais projetos.</span>
+        </div>
+      </div>
+    <% } %>
+  </div>
+
+  <!-- Create Project Form -->
+  <% if (usedProjects < currentPlan.projects) { %>
+    <div class="bg-gray-800/50 rounded-xl border border-gray-700 p-6">
+      <form id="createProjectForm" class="space-y-6">
+        <!-- Project Name -->
+        <div>
+          <label for="projectName" class="block text-sm font-medium text-gray-300 mb-2">Nome do Projeto</label>
+          <input
+            type="text"
+            id="projectName"
+            name="projectName"
+            class="w-full px-4 py-3 bg-gray-700/70 border border-gray-600 rounded-xl text-white placeholder-gray-400 focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
+            placeholder="Digite o nome do seu projeto"
+            required
+          />
+          <p class="text-xs text-gray-400 mt-1">O nome deve conter apenas letras, números e hífens</p>
+        </div>
+
+        <!-- Project Description -->
+        <div>
+          <label for="projectDescription" class="block text-sm font-medium text-gray-300 mb-2">Descrição (Opcional)</label>
+          <textarea
+            id="projectDescription"
+            name="projectDescription"
+            rows="3"
+            class="w-full px-4 py-3 bg-gray-700/70 border border-gray-600 rounded-xl text-white placeholder-gray-400 focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
+            placeholder="Descreva brevemente seu projeto"
+          ></textarea>
+        </div>
+
+        <!-- Image Selection -->
+        <div>
+          <label class="block text-sm font-medium text-gray-300 mb-2">Imagem do Servidor</label>
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <% if (images && images.length > 0) { %>
+              <% images.forEach(function(image, index) { %>
+                <div class="relative">
+                  <input
+                    type="radio"
+                    id="image_<%= index %>"
+                    name="selectedImage"
+                    value="<%= image.Name %>"
+                    class="sr-only peer"
+                    <% if (index === 0) { %>checked<% } %>
+                  />
+                  <label
+                    for="image_<%= index %>"
+                    class="flex flex-col p-4 bg-gray-700/50 border border-gray-600 rounded-xl cursor-pointer hover:bg-gray-700/70 peer-checked:border-indigo-500 peer-checked:bg-indigo-500/10 transition-all"
+                  >
+                    <div class="text-white font-medium mb-1"><%= image.Name %></div>
+                    <div class="text-xs text-gray-400"><%= image.Description || 'Sem descrição' %></div>
+                    <div class="text-xs text-gray-500 mt-2">Tamanho: <%= (image.Size / 1024 / 1024).toFixed(1) %>MB</div>
+                  </label>
+                </div>
+              <% }); %>
+            <% } else { %>
+              <div class="col-span-full p-4 bg-gray-700/30 border border-gray-600 rounded-xl text-center">
+                <div class="text-gray-400">Nenhuma imagem disponível</div>
+                <div class="text-xs text-gray-500 mt-1">Entre em contato com o administrador</div>
+              </div>
+            <% } %>
+          </div>
+        </div>
+
+        <!-- Resource Allocation -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <!-- RAM Allocation -->
+          <div>
+            <label for="ramAllocation" class="block text-sm font-medium text-gray-300 mb-2">Alocação de RAM (MB)</label>
+            <input
+              type="number"
+              id="ramAllocation"
+              name="ramAllocation"
+              min="128"
+              max="<%= availableRam %>"
+              value="256"
+              class="w-full px-4 py-3 bg-gray-700/70 border border-gray-600 rounded-xl text-white placeholder-gray-400 focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
+              required
+            />
+            <p class="text-xs text-gray-400 mt-1">Disponível: <%= availableRam %>MB</p>
+          </div>
+
+          <!-- Storage Allocation -->
+          <div>
+            <label for="storageAllocation" class="block text-sm font-medium text-gray-300 mb-2">Alocação de Armazenamento (GB)</label>
+            <input
+              type="number"
+              id="storageAllocation"
+              name="storageAllocation"
+              min="1"
+              max="<%= availableStorage %>"
+              value="2"
+              step="0.1"
+              class="w-full px-4 py-3 bg-gray-700/70 border border-gray-600 rounded-xl text-white placeholder-gray-400 focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
+              required
+            />
+            <p class="text-xs text-gray-400 mt-1">Disponível: <%= availableStorage %>GB</p>
+          </div>
+        </div>
+
+        <!-- Node Selection -->
+        <div>
+          <label class="block text-sm font-medium text-gray-300 mb-2">Servidor (Node)</label>
+          <div class="space-y-2">
+            <% if (nodes && nodes.length > 0) { %>
+              <% nodes.forEach(function(node, index) { %>
+                <div class="relative">
+                  <input
+                    type="radio"
+                    id="node_<%= index %>"
+                    name="selectedNode"
+                    value="<%= node.id %>"
+                    class="sr-only peer"
+                    <% if (index === 0) { %>checked<% } %>
+                  />
+                  <label
+                    for="node_<%= index %>"
+                    class="flex items-center justify-between p-4 bg-gray-700/50 border border-gray-600 rounded-xl cursor-pointer hover:bg-gray-700/70 peer-checked:border-indigo-500 peer-checked:bg-indigo-500/10 transition-all"
+                  >
+                    <div>
+                      <div class="text-white font-medium"><%= node.name %></div>
+                      <div class="text-xs text-gray-400"><%= node.location || 'Localização não especificada' %></div>
+                    </div>
+                    <div class="text-right">
+                      <div class="text-xs text-gray-400">Status</div>
+                      <div class="text-sm <%= node.status === 'online' ? 'text-green-400' : 'text-red-400' %>"><%= node.status || 'offline' %></div>
+                    </div>
+                  </label>
+                </div>
+              <% }); %>
+            <% } else { %>
+              <div class="p-4 bg-gray-700/30 border border-gray-600 rounded-xl text-center">
+                <div class="text-gray-400">Nenhum servidor disponível</div>
+                <div class="text-xs text-gray-500 mt-1">Entre em contato com o administrador</div>
+              </div>
+            <% } %>
+          </div>
+        </div>
+
+        <!-- Submit Button -->
+        <div class="flex justify-end space-x-4">
+          <a href="/instances" class="px-6 py-3 text-sm font-medium text-gray-300 bg-gray-700 hover:bg-gray-600 rounded-xl transition-colors">
+            Cancelar
+          </a>
+          <button
+            type="submit"
+            class="px-6 py-3 text-sm font-medium text-white bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-700 hover:to-indigo-600 rounded-xl shadow-lg hover:shadow-indigo-500/20 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+            id="submitButton"
+          >
+            <span id="submitText">Criar Projeto</span>
+            <svg id="loadingSpinner" class="hidden animate-spin -mr-1 ml-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+          </button>
+        </div>
+      </form>
+    </div>
+  <% } %>
+</main>
+
+<script>
+document.getElementById('createProjectForm')?.addEventListener('submit', async function(e) {
+  e.preventDefault();
+  
+  const submitButton = document.getElementById('submitButton');
+  const submitText = document.getElementById('submitText');
+  const loadingSpinner = document.getElementById('loadingSpinner');
+  
+  // Disable form and show loading
+  submitButton.disabled = true;
+  submitText.textContent = 'Criando...';
+  loadingSpinner.classList.remove('hidden');
+  
+  const formData = new FormData(this);
+  const projectData = {
+    name: formData.get('projectName'),
+    description: formData.get('projectDescription'),
+    image: formData.get('selectedImage'),
+    ram: parseInt(formData.get('ramAllocation')),
+    storage: parseFloat(formData.get('storageAllocation')),
+    node: formData.get('selectedNode')
+  };
+  
+  try {
+    const response = await fetch('/api/create-project', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(projectData)
+    });
+    
+    const result = await response.json();
+    
+    if (response.ok) {
+      alert('Projeto criado com sucesso!');
+      window.location.href = '/instances';
+    } else {
+      throw new Error(result.message || 'Erro ao criar projeto');
+    }
+  } catch (error) {
+    console.error('Error:', error);
+    alert('Erro ao criar projeto: ' + error.message);
+  } finally {
+    // Re-enable form
+    submitButton.disabled = false;
+    submitText.textContent = 'Criar Projeto';
+    loadingSpinner.classList.add('hidden');
+  }
+});
+
+// Validate resource allocation in real-time
+document.getElementById('ramAllocation')?.addEventListener('input', function() {
+  const value = parseInt(this.value);
+  const max = parseInt(this.max);
+  if (value > max) {
+    this.value = max;
+  }
+});
+
+document.getElementById('storageAllocation')?.addEventListener('input', function() {
+  const value = parseFloat(this.value);
+  const max = parseFloat(this.max);
+  if (value > max) {
+    this.value = max;
+  }
+});
+</script>
+
+<%- include('components/footer') %>
