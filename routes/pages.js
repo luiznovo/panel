@@ -85,15 +85,12 @@ async function setupRoutes() {
                         
                         // Get available nodes and images for project creation
                         const nodeIds = await db.get('nodes') || [];
-                        console.log('Node IDs:', nodeIds);
                         const nodes = await Promise.all(
                             nodeIds.map(async (id) => {
                                 const node = await db.get(id + '_node');
-                                console.log(`Node ${id}:`, node);
                                 return node;
                             })
                         ).then(nodes => nodes.filter(node => node !== null && node !== undefined));
-                        console.log('Filtered nodes:', nodes);
                         const images = await db.get('images') || [];
                 
                         res.render(page.template, { 

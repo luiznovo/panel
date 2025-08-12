@@ -439,7 +439,7 @@ document.getElementById('createProjectForm')?.addEventListener('submit', async f
       memory: formData.get('ramAllocation'),
       disk: formData.get('storageAllocation'),
       cpu: formData.get('cpuAllocation'),
-      ports: formData.get('additionalPorts') || '',
+      ports: formData.get('additionalPorts') || '0:0',
       primary: formData.get('primaryPort'),
       nodeId: formData.get('selectedNode'),
       user: '<%= user.userId %>',
