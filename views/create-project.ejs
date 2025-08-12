@@ -104,6 +104,10 @@
                     id="image_<%= index %>"
                     name="selectedImage"
                     value="<%= image.Name %>"
+                    data-imagename="<%= image.Name %>"
+                    data-variables="<%= JSON.stringify(image.Variables || {}) %>"
+                    data-configfilepath="<%= image.ConfigFilePath || '' %>"
+                    data-configfilecontent="<%= image.ConfigFileContent || '' %>"
                     class="sr-only peer"
                     <% if (index === 0) { %>checked<% } %>
                   />
@@ -159,6 +163,62 @@
               required
             />
             <p class="text-xs text-gray-400 mt-1">Disponível: <%= availableStorage %>GB</p>
+          </div>
+        </div>
+
+        <!-- Additional Configuration -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <!-- CPU Allocation -->
+          <div>
+            <label for="cpuAllocation" class="block text-sm font-medium text-gray-300 mb-2">CPU (%)</label>
+            <input
+              type="number"
+              id="cpuAllocation"
+              name="cpuAllocation"
+              min="10"
+              max="100"
+              value="50"
+              class="w-full px-4 py-3 bg-gray-700/70 border border-gray-600 rounded-xl text-white placeholder-gray-400 focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
+              required
+            />
+            <p class="text-xs text-gray-400 mt-1">Porcentagem de CPU alocada</p>
+          </div>
+
+          <!-- Primary Port -->
+          <div>
+            <label for="primaryPort" class="block text-sm font-medium text-gray-300 mb-2">Porta Primária</label>
+            <input
+              type="number"
+              id="primaryPort"
+              name="primaryPort"
+              min="1"
+              max="65535"
+              value="25565"
+              class="w-full px-4 py-3 bg-gray-700/70 border border-gray-600 rounded-xl text-white placeholder-gray-400 focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
+              required
+            />
+            <p class="text-xs text-gray-400 mt-1">Porta principal do servidor</p>
+          </div>
+
+          <!-- Additional Ports -->
+          <div>
+            <label for="additionalPorts" class="block text-sm font-medium text-gray-300 mb-2">Portas Adicionais (Opcional)</label>
+            <input
+              type="text"
+              id="additionalPorts"
+              name="additionalPorts"
+              placeholder="8080:8080,9000:9000"
+              class="w-full px-4 py-3 bg-gray-700/70 border border-gray-600 rounded-xl text-white placeholder-gray-400 focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
+            />
+            <p class="text-xs text-gray-400 mt-1">Formato: porta:porta,porta:porta</p>
+          </div>
+        </div>
+
+        <!-- Dynamic Variables Section -->
+        <div id="variablesSection" class="hidden">
+          <h3 class="text-lg font-medium text-white mb-4">Configurações da Imagem</h3>
+          <div id="variablesForm" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <!-- Dynamic variables will be inserted here -->
           </div>
         </div>
 
@@ -224,6 +284,116 @@
 </main>
 
 <script>
+// Handle image selection and dynamic variables
+document.querySelectorAll('input[name="selectedImage"]').forEach(radio => {
+  radio.addEventListener('change', function() {
+    if (this.checked) {
+      const variables = JSON.parse(this.getAttribute('data-variables') || '{}');
+      displayVariables(variables);
+    }
+  });
+});
+
+// Display variables based on selected image
+function displayVariables(variables) {
+  const variablesSection = document.getElementById('variablesSection');
+  const variablesForm = document.getElementById('variablesForm');
+  
+  if (!variablesSection || !variablesForm) return;
+  
+  variablesForm.innerHTML = '';
+  
+  if (Object.keys(variables).length === 0) {
+    variablesSection.classList.add('hidden');
+    return;
+  }
+  
+  variablesSection.classList.remove('hidden');
+  
+  Object.entries(variables).forEach(([key, config]) => {
+    const div = document.createElement('div');
+    div.className = 'space-y-2';
+    
+    const label = document.createElement('label');
+    label.className = 'block text-sm font-medium text-gray-300';
+    label.textContent = config.display || key;
+    
+    let input;
+    
+    switch (config.type) {
+      case 'text':
+        input = document.createElement('input');
+        input.type = 'text';
+        input.value = config.default || '';
+        input.placeholder = config.placeholder || '';
+        break;
+        
+      case 'number':
+        input = document.createElement('input');
+        input.type = 'number';
+        input.value = config.default || '';
+        input.min = config.min || '';
+        input.max = config.max || '';
+        break;
+        
+      case 'boolean':
+        input = document.createElement('input');
+        input.type = 'checkbox';
+        input.checked = config.default === 'true';
+        break;
+        
+      case 'select':
+        input = document.createElement('select');
+        if (config.options) {
+          config.options.forEach(option => {
+            const optionElement = document.createElement('option');
+            optionElement.value = option.value;
+            optionElement.textContent = option.display || option.value;
+            if (option.value === config.default) {
+              optionElement.selected = true;
+            }
+            input.appendChild(optionElement);
+          });
+        }
+        break;
+        
+      default:
+        input = document.createElement('input');
+        input.type = 'text';
+        input.value = config.default || '';
+    }
+    
+    input.name = key;
+    input.className = 'w-full px-4 py-3 bg-gray-700/70 border border-gray-600 rounded-xl text-white placeholder-gray-400 focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition';
+    
+    if (config.required) {
+      input.required = true;
+    }
+    
+    div.appendChild(label);
+    div.appendChild(input);
+    
+    if (config.description) {
+      const description = document.createElement('p');
+      description.className = 'text-xs text-gray-400';
+      description.textContent = config.description;
+      div.appendChild(description);
+    }
+    
+    variablesForm.appendChild(div);
+  });
+}
+
+// Initialize variables for first image
+document.addEventListener('DOMContentLoaded', function() {
+  const firstImage = document.querySelector('input[name="selectedImage"]:checked');
+  if (firstImage) {
+    const variables = JSON.parse(firstImage.getAttribute('data-variables') || '{}');
+    displayVariables(variables);
+  }
+});
+
+// Form submission handler
 document.getElementById('createProjectForm')?.addEventListener('submit', async function(e) {
   e.preventDefault();
   
@@ -236,23 +406,57 @@ document.getElementById('createProjectForm')?.addEventListener('submit', async f
   submitText.textContent = 'Criando...';
   loadingSpinner.classList.remove('hidden');
   
-  const formData = new FormData(this);
-  const projectData = {
-    name: formData.get('projectName'),
-    description: formData.get('projectDescription'),
-    image: formData.get('selectedImage'),
-    ram: parseInt(formData.get('ramAllocation')),
-    storage: parseFloat(formData.get('storageAllocation')),
-    node: formData.get('selectedNode')
-  };
-  
   try {
-    const response = await fetch('/api/create-project', {
-      method: 'POST',
+    // Get form values
+    const formData = new FormData(this);
+    const selectedImageInput = document.querySelector('input[name="selectedImage"]:checked');
+    
+    if (!selectedImageInput) {
+      throw new Error('Selecione uma imagem');
+    }
+    
+    // Collect variables
+    const variables = {};
+    const variablesForm = document.getElementById('variablesForm');
+    if (variablesForm) {
+      const inputs = variablesForm.querySelectorAll('input, select');
+      inputs.forEach(input => {
+        if (input.name) {
+          if (input.type === 'checkbox') {
+            variables[input.name] = input.checked ? 'true' : 'false';
+          } else {
+            variables[input.name] = input.value;
+          }
+        }
+      });
+    }
+    
+    // Prepare deployment data
+    const deployData = {
+      name: formData.get('projectName'),
+      image: selectedImageInput.value,
+      imagename: selectedImageInput.getAttribute('data-imagename'),
+      memory: formData.get('ramAllocation'),
+      disk: formData.get('storageAllocation'),
+      cpu: formData.get('cpuAllocation'),
+      ports: formData.get('additionalPorts') || '',
+      primary: formData.get('primaryPort'),
+      nodeId: formData.get('selectedNode'),
+      user: '<%= user.userId %>',
+      variables: JSON.stringify(variables)
+    };
+    
+    // Validate required fields
+    if (!deployData.name || !deployData.image || !deployData.memory || !deployData.disk || !deployData.cpu || !deployData.primary || !deployData.nodeId) {
+      throw new Error('Preencha todos os campos obrigatórios');
+    }
+    
+    // Send request to deploy endpoint
+    const response = await fetch('/instances/deploy?' + new URLSearchParams(deployData), {
+      method: 'GET',
       headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(projectData)
+        'Content-Type': 'application/json'
+      }
     });
     
     const result = await response.json();
@@ -261,7 +465,7 @@ document.getElementById('createProjectForm')?.addEventListener('submit', async f
       alert('Projeto criado com sucesso!');
       window.location.href = '/instances';
     } else {
-      throw new Error(result.message || 'Erro ao criar projeto');
+      throw new Error(result.error || 'Erro ao criar projeto');
     }
   } catch (error) {
     console.error('Error:', error);
@@ -288,6 +492,26 @@ document.getElementById('storageAllocation')?.addEventListener('input', function
   const max = parseFloat(this.max);
   if (value > max) {
     this.value = max;
+  }
+});
+
+// Validate port format
+document.getElementById('additionalPorts')?.addEventListener('input', function() {
+  const value = this.value;
+  if (value && !/^(\d+:\d+)(,\d+:\d+)*$/.test(value)) {
+    this.setCustomValidity('Formato inválido. Use: porta:porta,porta:porta');
+  } else {
+    this.setCustomValidity('');
+  }
+});
+
+// Validate primary port
+document.getElementById('primaryPort')?.addEventListener('input', function() {
+  const value = parseInt(this.value);
+  if (value < 1 || value > 65535) {
+    this.setCustomValidity('A porta deve estar entre 1 e 65535');
+  } else {
+    this.setCustomValidity('');
   }
 });
 </script>

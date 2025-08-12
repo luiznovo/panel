@@ -61,27 +61,40 @@ async function processInstances() {
 }
 
 /**
- * Middleware to verify if the user is an administrator.
- * Checks if the user object exists and if the user has admin privileges. If not, redirects to the
- * home page. If the user is an admin, proceeds to the next middleware or route handler.
+ * Middleware to verify if the user is an administrator or creating for themselves.
+ * Checks if the user object exists and if the user has admin privileges or is creating for their own account.
+ * If not, redirects to the home page. If authorized, proceeds to the next middleware or route handler.
  *
  * @param {Object} req - The request object, containing user data.
  * @param {Object} res - The response object.
  * @param {Function} next - The next middleware or route handler to be executed.
  * @returns {void} Either redirects or proceeds by calling next().
  */
-function isAdmin(req, res, next) {
-  if (!req.user || req.user.admin !== true) {
+function isAdminOrSelf(req, res, next) {
+  if (!req.user) {
     return res.redirect('../');
   }
-  next();
+  
+  // Allow admins to create for anyone
+  if (req.user.admin === true) {
+    return next();
+  }
+  
+  // Allow users to create for themselves
+  const targetUser = req.query.user;
+  if (targetUser && targetUser === req.user.userId) {
+    return next();
+  }
+  
+  // Deny access if not admin and not creating for self
+  return res.redirect('../');
 }
 
 /**
  * GET /instances/deploy
  * Handles the deployment of a new instance based on the parameters provided via query strings.
  */
-router.get('/instances/deploy', isAdmin, async (req, res) => {
+router.get('/instances/deploy', isAdminOrSelf, async (req, res) => {
   const { image, imagename, memory, disk, cpu, ports, nodeId, name, user, primary, variables } =
     req.query;
   if (!image || !memory || !cpu || !disk || !ports || !nodeId || !name || !user || !primary) {
@@ -89,6 +102,38 @@ router.get('/instances/deploy', isAdmin, async (req, res) => {
   }
 
   try {
+    // Validate plan limits for non-admin users
+    if (!req.user.admin) {
+      const plans = {
+        'Gratuito': { projects: 1, ram: 512, storage: 1 },
+        'Iniciante': { projects: 5, ram: 3072, storage: 9 },
+        'Intermediário': { projects: 15, ram: 10240, storage: 20 },
+        'Super': { projects: 30, ram: 20480, storage: 30 }
+      };
+      
+      const userPlan = plans[req.user.plan || 'Gratuito'];
+      const userInstances = await db.get(`${user}_instances`) || [];
+      const usedRam = userInstances.reduce((total, instance) => total + (instance.ramUsage || 0), 0);
+      const usedStorage = userInstances.reduce((total, instance) => total + (instance.storageUsage || 0), 0);
+      
+      // Check project limit
+      if (userInstances.length >= userPlan.projects) {
+        return res.status(400).json({ error: 'Project limit exceeded for your plan' });
+      }
+      
+      // Check RAM limit
+      const requestedRam = parseInt(memory);
+      if (usedRam + requestedRam > userPlan.ram) {
+        return res.status(400).json({ error: 'RAM limit exceeded for your plan' });
+      }
+      
+      // Check storage limit
+      const requestedStorage = parseFloat(disk);
+      if (usedStorage + requestedStorage > userPlan.storage) {
+        return res.status(400).json({ error: 'Storage limit exceeded for your plan' });
+      }
+    }
+
     const Id = uuid().split('-')[0];
     const node = await db.get(`${nodeId}_node`);
     if (!node) {
