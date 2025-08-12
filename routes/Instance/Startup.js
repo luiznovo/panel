@@ -346,7 +346,7 @@ async function prepareRequestData(
         data: {
             Name: name,
             Id: id,
-            Image: image,
+            Image: imageData?.Image || image,
             Env: Array.isArray(Env) ? Env : [],
             Scripts: imageData ? imageData.Scripts : undefined,
             Memory: memory ? parseInt(memory) : undefined,

@@ -212,7 +212,7 @@ async function prepareRequestData(
             data: {
                 Name: name,
                 Id: id,
-                Image: image,
+                Image: imageData?.Image || image,
                 Env: Env || {},
                 Scripts: imageData?.Scripts || [],
                 Memory: parseInt(memory) || DEFAULT_MEMORY,

@@ -201,7 +201,7 @@ async function prepareRequestData(image, memory, cpu, ports, name, node, Id, var
     data: {
       Name: name,
       Id,
-      Image: image,
+      Image: imageData ? imageData.Image : image,
       Env: imageData ? imageData.Env : undefined,
       Scripts: imageData ? imageData.Scripts : undefined,
       Memory: memory ? parseInt(memory) : undefined,

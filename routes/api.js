@@ -694,7 +694,7 @@ async function updateDatabaseWithNewInstance(
             Cpu: parseInt(cpu),
             Ports: ports,
             Primary: primary,
-            Image: image,
+            Image: imageData?.Image || image,
             AltImages: imageData ? imageData.AltImages : [],
             StopCommand: imageData ? imageData.StopCommand : undefined,
             imageData,
@@ -740,7 +740,7 @@ async function prepareRequestData(image, memory, cpu, ports, name, node, Id, var
         data: {
             Name: name,
             Id,
-            Image: image,
+            Image: imageData?.Image || image,
             Env: imageData ? imageData.Env : [],
             Scripts: imageData ? imageData.Scripts : [],
             Memory: parseInt(memory),
@@ -941,7 +941,7 @@ router.post('/api/create-project', async (req, res) => {
             Description: description || '',
             User: req.user.userId,
             Node: node,
-            Image: image,
+            Image: imageData?.Image || image,
             Memory: ram,
             Disk: storage * 1024, // Convert GB to MB
             Cpu: Math.min(100, Math.floor(ram / 256) * 25), // Auto-calculate CPU based on RAM
