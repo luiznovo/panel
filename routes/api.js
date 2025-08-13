@@ -10,39 +10,181 @@ const { db } = require('../handlers/db.js');
 
 const saltRounds = 10;
 
-// Improved API key validation middleware
+// CORREÇÃO DE SEGURANÇA: Validação de API key melhorada
+const apiKeyAttempts = new Map(); // Rate limiting para API keys
+
 async function validateApiKey(req, res, next) {
     const apiKey = req.headers['x-api-key'];
+    const clientIp = req.ip || req.connection.remoteAddress;
 
     if (!apiKey) {
-        return res.status(401).json({ error: 'API key is required' });
+        logAudit('anonymous', 'anonymous', 'api:missing_key', clientIp, {
+            path: req.path,
+            userAgent: req.headers['user-agent']
+        });
+        return res.status(401).json({ 
+            success: false,
+            error: 'API key é obrigatória' 
+        });
+    }
+
+    // CORREÇÃO DE SEGURANÇA: Rate limiting para tentativas de API key
+    const attemptKey = `${clientIp}:${apiKey.substring(0, 8)}`;
+    const now = Date.now();
+    const attempts = apiKeyAttempts.get(attemptKey) || { count: 0, resetTime: now + 15 * 60 * 1000 };
+    
+    if (now > attempts.resetTime) {
+        attempts.count = 0;
+        attempts.resetTime = now + 15 * 60 * 1000;
+    }
+    
+    if (attempts.count >= 10) {
+        logAudit('anonymous', 'anonymous', 'api:rate_limited', clientIp, {
+            apiKeyPrefix: apiKey.substring(0, 8),
+            attempts: attempts.count
+        });
+        return res.status(429).json({ 
+            success: false,
+            error: 'Muitas tentativas. Tente novamente em 15 minutos.' 
+        });
     }
 
     try {
         const apiKeys = await db.get('apiKeys') || [];
-        const validKey = apiKeys.find(key => key.key === apiKey);
+        
+        // CORREÇÃO DE SEGURANÇA: Comparação segura de API keys
+        let validKey = null;
+        for (const key of apiKeys) {
+            // Se a key está hasheada, comparar com bcrypt
+            if (key.hashed) {
+                if (await bcrypt.compare(apiKey, key.key)) {
+                    validKey = key;
+                    break;
+                }
+            } else {
+                // Compatibilidade com keys não hasheadas (migração gradual)
+                if (key.key === apiKey) {
+                    validKey = key;
+                    break;
+                }
+            }
+        }
 
         if (!validKey) {
-            return res.status(401).json({ error: 'Invalid API key' });
+            attempts.count++;
+            apiKeyAttempts.set(attemptKey, attempts);
+            
+            logAudit('anonymous', 'anonymous', 'api:invalid_key', clientIp, {
+                apiKeyPrefix: apiKey.substring(0, 8),
+                path: req.path,
+                attempts: attempts.count
+            });
+            
+            return res.status(401).json({ 
+                success: false,
+                error: 'API key inválida' 
+            });
         }
 
-        // Check if API key is expired
+        // CORREÇÃO DE SEGURANÇA: Verificar expiração
         if (validKey.expiresAt && new Date(validKey.expiresAt) < new Date()) {
-            return res.status(401).json({ error: 'API key has expired' });
+            logAudit('anonymous', 'anonymous', 'api:expired_key', clientIp, {
+                keyId: validKey.id,
+                expiresAt: validKey.expiresAt
+            });
+            
+            return res.status(401).json({ 
+                success: false,
+                error: 'API key expirada' 
+            });
         }
+
+        // CORREÇÃO DE SEGURANÇA: Verificar se a key está ativa
+        if (validKey.status === 'disabled') {
+            logAudit('anonymous', 'anonymous', 'api:disabled_key', clientIp, {
+                keyId: validKey.id
+            });
+            
+            return res.status(401).json({ 
+                success: false,
+                error: 'API key desabilitada' 
+            });
+        }
+
+        // CORREÇÃO DE SEGURANÇA: Atualizar último uso
+        validKey.lastUsed = new Date().toISOString();
+        validKey.usageCount = (validKey.usageCount || 0) + 1;
+        
+        // Salvar atualização no banco
+        const updatedKeys = apiKeys.map(k => k.id === validKey.id ? validKey : k);
+        await db.set('apiKeys', updatedKeys);
+
+        // Reset tentativas em caso de sucesso
+        apiKeyAttempts.delete(attemptKey);
+        
+        // Log de uso bem-sucedido
+        logAudit(validKey.userId || 'system', validKey.name || 'api-key', 'api:key_used', clientIp, {
+            keyId: validKey.id,
+            path: req.path,
+            method: req.method
+        });
 
         req.apiKey = validKey;
         next();
     } catch (error) {
+        logAudit('anonymous', 'anonymous', 'api:validation_error', clientIp, {
+            error: error.message,
+            path: req.path
+        });
+        
         console.error('API key validation error:', error);
-        res.status(500).json({ error: 'Failed to validate API key' });
+        res.status(500).json({ 
+            success: false,
+            error: 'Erro interno do servidor' 
+        });
     }
 }
 
-// Utility function for error responses
-function errorResponse(res, status, message, error = null) {
+// CORREÇÃO DE SEGURANÇA: Limpar cache de tentativas periodicamente
+setInterval(() => {
+    const now = Date.now();
+    for (const [key, attempts] of apiKeyAttempts.entries()) {
+        if (now > attempts.resetTime) {
+            apiKeyAttempts.delete(key);
+        }
+    }
+}, 5 * 60 * 1000); // Limpar a cada 5 minutos
+
+// CORREÇÃO DE SEGURANÇA: Função de resposta de erro sanitizada
+function errorResponse(res, status, message, error = null, req = null) {
+    // Log completo do erro para auditoria
+    if (error && req) {
+        logAudit(
+            req.user?.userId || req.apiKey?.userId || 'anonymous',
+            req.user?.username || req.apiKey?.name || 'anonymous',
+            'error:api_error',
+            req.ip || req.connection.remoteAddress,
+            {
+                path: req.path,
+                method: req.method,
+                statusCode: status,
+                errorMessage: error.message,
+                stack: error.stack
+            }
+        );
+    }
+    
     if (error) console.error(message, error);
-    return res.status(status).json({ error: message });
+    
+    // CORREÇÃO DE SEGURANÇA: Sanitizar mensagem de erro
+    const sanitizedMessage = process.env.NODE_ENV === 'production' 
+        ? (status >= 500 ? 'Erro interno do servidor' : message)
+        : message;
+    
+    return res.status(status).json({ 
+        success: false,
+        error: sanitizedMessage 
+    });
 }
 
 // Users endpoints

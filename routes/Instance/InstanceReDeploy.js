@@ -251,7 +251,7 @@ async function prepareRequestData(image, memory, cpu, ports, name, node, id, con
             data: {
                 Name: name,
                 Id: id,
-                Image: imageData?.Image || image,
+                Image: image,
                 Env: Array.isArray(Env) ? Env : [],
                 Scripts: imageData.Scripts || [],
                 Memory: parseInt(memory),

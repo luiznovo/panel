@@ -18,7 +18,11 @@ const {
 } = require("../handlers/email.js");
 const speakeasy = require("speakeasy");
 const bcrypt = require("bcrypt");
+const { logAudit } = require('../handlers/auditlog');
 const saltRounds = 10;
+
+// CORREÇÃO DE SEGURANÇA: Rate limiting para tentativas de login
+const loginAttempts = new Map();
 
 const router = express.Router();
 
@@ -36,9 +40,29 @@ router.use(passport.session());
 passport.use(
   new LocalStrategy(async (username, password, done) => {
     try {
+      // CORREÇÃO DE SEGURANÇA: Rate limiting por IP e usuário
+      const clientIp = done.req?.ip || done.req?.connection?.remoteAddress || 'unknown';
+      const attemptKey = `${clientIp}:${username}`;
+      const now = Date.now();
+      const attempts = loginAttempts.get(attemptKey) || { count: 0, resetTime: now + 15 * 60 * 1000 };
+      
+      if (now > attempts.resetTime) {
+        attempts.count = 0;
+        attempts.resetTime = now + 15 * 60 * 1000;
+      }
+      
+      if (attempts.count >= 5) {
+        logAudit('anonymous', username, 'login:rate_limited', clientIp, {
+          attempts: attempts.count,
+          resetTime: new Date(attempts.resetTime).toISOString()
+        });
+        return done(null, false, { message: "Muitas tentativas de login. Tente novamente em 15 minutos." });
+      }
+
       const settings = (await db.get("settings")) || {};
       const users = await db.get("users");
       if (!users) {
+        logAudit('anonymous', username, 'login:no_users', clientIp);
         return done(null, false, { message: "No users found." });
       }
 
@@ -52,10 +76,21 @@ passport.use(
       }
 
       if (!user) {
+        // CORREÇÃO DE SEGURANÇA: Incrementar tentativas e log
+        attempts.count++;
+        loginAttempts.set(attemptKey, attempts);
+        
+        logAudit('anonymous', username, 'login:user_not_found', clientIp, {
+          isEmail,
+          attempts: attempts.count
+        });
+        
         return done(null, false, { message: "Incorrect username or email." });
       }
 
       if (!user.verified && (settings.emailVerification || false)) {
+        logAudit(user.userId, user.username, 'login:email_not_verified', clientIp);
+        
         return done(null, false, {
           message: "Email not verified. Please verify your email.",
           userNotVerified: true,
@@ -64,11 +99,30 @@ passport.use(
 
       const match = await bcrypt.compare(password, user.password);
       if (match) {
+        // CORREÇÃO DE SEGURANÇA: Reset tentativas em caso de sucesso
+        loginAttempts.delete(attemptKey);
+        
+        logAudit(user.userId, user.username, 'login:success', clientIp, {
+          userAgent: done.req?.headers?.['user-agent']
+        });
         return done(null, user);
       } else {
+        // CORREÇÃO DE SEGURANÇA: Incrementar tentativas para senha incorreta
+        attempts.count++;
+        loginAttempts.set(attemptKey, attempts);
+        
+        logAudit(user.userId, user.username, 'login:wrong_password', clientIp, {
+          attempts: attempts.count
+        });
+        
         return done(null, false, { message: "Incorrect password." });
       }
     } catch (error) {
+      // CORREÇÃO DE SEGURANÇA: Log de erro de autenticação
+      logAudit('anonymous', username, 'login:error', clientIp, {
+        error: error.message
+      });
+      
       return done(error);
     }
   }),
@@ -547,11 +601,26 @@ function generateRandomCode(length) {
  * @returns {Response} No specific return value but ends the user's session and redirects.
  */
 router.get("/auth/logout", (req, res) => {
-  req.logout(req.user, (err) => {
+  // CORREÇÃO DE SEGURANÇA: Log de logout
+  if (req.user) {
+    logAudit(req.user.userId, req.user.username, 'logout:success', req.ip || req.connection.remoteAddress);
+  }
+  
+  req.logout((err) => {
     if (err) return next(err);
     res.redirect("/");
   });
 });
+
+// CORREÇÃO DE SEGURANÇA: Limpar cache de tentativas de login periodicamente
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, attempts] of loginAttempts.entries()) {
+    if (now > attempts.resetTime) {
+      loginAttempts.delete(key);
+    }
+  }
+}, 5 * 60 * 1000); // Limpar a cada 5 minutos
 
 initializeRoutes().catch((error) => {
   console.error("Error initializing routes:", error);

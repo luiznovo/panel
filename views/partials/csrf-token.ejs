@@ -1,0 +1,4 @@
+<%# CORREÇÃO DE SEGURANÇA: Token CSRF para formulários %>
+<% if (typeof csrfToken !== 'undefined' && csrfToken) { %>
+  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+<% } %>

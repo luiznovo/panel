@@ -19,22 +19,19 @@ const fs = require("node:fs");
 const { logAudit } = require("../handlers/auditlog.js");
 const nodemailer = require("nodemailer");
 const { sendTestEmail } = require("../handlers/email.js");
+const { isAdmin: securityIsAdmin, logSensitiveAction } = require('../utils/securityMiddleware');
 
 /**
- * Middleware to verify if the user is an administrator.
- * Checks if the user object exists and if the user has admin privileges. If not, redirects to the
- * home page. If the user is an admin, proceeds to the next middleware or route handler.
- *
- * @param {Object} req - The request object, containing user data.
- * @param {Object} res - The response object.
- * @param {Function} next - The next middleware or route handler to be executed.
- * @returns {void} Either redirects or proceeds by calling next().
+ * CORREÇÃO DE SEGURANÇA: Middleware de administrador melhorado
+ * Usa o middleware centralizado de segurança com logs de auditoria
  */
 function isAdmin(req, res, next) {
-  if (!req.user || req.user.admin !== true) {
-    return res.redirect("../");
-  }
-  next();
+  return securityIsAdmin(req, res, next);
+}
+
+// CORREÇÃO DE SEGURANÇA: Middleware para ações administrativas sensíveis
+function logAdminAction(action) {
+  return logSensitiveAction(`admin:${action}`);
 }
 
 async function doesUserExist(username) {
@@ -363,7 +360,7 @@ router.get("/api/analytics", isAdmin, async (req, res) => {
  * POST /nodes/create
  * Creates a new node with a unique configureKey for secure configuration.
  */
-router.post("/nodes/create", isAdmin, async (req, res) => {
+router.post("/nodes/create", isAdmin, logAdminAction('node_create'), async (req, res) => {
   const configureKey = uuidv4(); // Generate a unique configureKey
   const node = {
     id: uuidv4(),
@@ -681,7 +678,7 @@ router.post("/nodes/configure", async (req, res) => {
   }
 });
 
-router.post("/users/create", isAdmin, async (req, res) => {
+router.post("/users/create", isAdmin, logAdminAction('user_create'), async (req, res) => {
   const { username, email, password, admin, verified } = req.body;
 
   if (!username || !email || !password) {
@@ -724,7 +721,7 @@ router.post("/users/create", isAdmin, async (req, res) => {
   res.status(201).send(newUser);
 });
 
-router.delete("/user/delete", isAdmin, async (req, res) => {
+router.delete("/user/delete", isAdmin, logAdminAction('user_delete'), async (req, res) => {
   const userId = req.body.userId;
   const users = (await db.get("users")) || [];
 
@@ -820,7 +817,7 @@ router.post("/admin/users/edit/:userId", isAdmin, async (req, res, next) => {
  *
  * @returns {Response} Sends a status response indicating the successful deletion of the node.
  */
-router.delete("/nodes/delete", isAdmin, async (req, res) => {
+router.delete("/nodes/delete", isAdmin, logAdminAction('node_delete'), async (req, res) => {
   const nodeId = req.body.nodeId;
   const nodes = (await db.get("nodes")) || [];
   const newNodes = nodes.filter((id) => id !== nodeId);
@@ -1388,7 +1385,7 @@ router.get("/admin/instances/purge/all", isAdmin, async (req, res) => {
   }
 });
 
-router.post("/admin/instances/suspend/:id", isAdmin, async (req, res) => {
+router.post("/admin/instances/suspend/:id", isAdmin, logAdminAction('instance_suspend'), async (req, res) => {
   const { id } = req.params;
 
   try {

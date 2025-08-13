@@ -19,8 +19,10 @@ const { db } = require("./handlers/db.js");
 const translationMiddleware = require("./handlers/translation");
 const cookieParser = require("cookie-parser");
 const rateLimit = require("express-rate-limit");
+const csrf = require("csurf");
 const theme = require("./storage/theme.json");
 const analytics = require("./utils/analytics.js");
+const { logAudit } = require("./handlers/auditlog");
 
 const sqlite = require("better-sqlite3");
 const SqliteStore = require("better-sqlite3-session-store")(session);
@@ -64,18 +66,75 @@ app.use(translationMiddleware);
 app.use(passport.initialize());
 app.use(passport.session());
 
-const postRateLimiter = rateLimit({
-  windowMs: 60 * 100,
-  max: 6,
-  message: "Too many requests, please try again later",
+// CORREÇÃO DE SEGURANÇA: Rate limiting melhorado
+const generalRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutos
+  max: 100, // máximo 100 requests por IP
+  message: {
+    error: "Muitas tentativas. Tente novamente em 15 minutos.",
+    retryAfter: 15 * 60
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (req) => {
+    // Pular rate limiting para comunicação interna com wings
+    return req.headers['user-agent']?.includes('axios') && 
+           req.ip === '127.0.0.1';
+  }
 });
 
-app.use((req, res, next) => {
-  if (req.method === "POST") {
-    postRateLimiter(req, res, next);
-  } else {
-    next();
+const authRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutos
+  max: 5, // máximo 5 tentativas de login
+  message: {
+    error: "Muitas tentativas de login. Tente novamente em 15 minutos."
+  },
+  skipSuccessfulRequests: true
+});
+
+const apiRateLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minuto
+  max: 30, // máximo 30 requests por minuto para APIs
+  message: {
+    error: "Limite de API excedido. Tente novamente em 1 minuto."
   }
+});
+
+// Aplicar rate limiting geral
+app.use(generalRateLimiter);
+
+// Rate limiting específico para rotas de autenticação
+app.use('/auth', authRateLimiter);
+app.use('/api', apiRateLimiter);
+
+// CORREÇÃO DE SEGURANÇA: Proteção CSRF
+const csrfProtection = csrf({ 
+  cookie: {
+    httpOnly: true,
+    secure: config.mode === 'production',
+    sameSite: 'strict'
+  }
+});
+
+// Aplicar CSRF apenas para rotas web (não APIs)
+app.use((req, res, next) => {
+  // Pular CSRF para APIs que usam API keys
+  if (req.path.startsWith('/api/') && req.headers['x-api-key']) {
+    return next();
+  }
+  // Pular CSRF para WebSocket connections
+  if (req.headers.upgrade === 'websocket') {
+    return next();
+  }
+  csrfProtection(req, res, next);
+});
+
+// Disponibilizar token CSRF para views
+app.use((req, res, next) => {
+  if (req.csrfToken) {
+    res.locals.csrfToken = req.csrfToken();
+  }
+  next();
 });
 
 /**
