@@ -196,6 +196,9 @@ async function prepareRequestData(
             throw new Error("Invalid node configuration");
         }
 
+        // Ensure the Docker image name is lowercase to prevent "invalid reference format" errors
+        const dockerImage = imageData && imageData.Image ? imageData.Image.toLowerCase() : image.toLowerCase();
+
         const requestData = {
             method: "post",
             url: `http://${node.address}:${node.port}/instances/reinstall/${containerId}`,
@@ -212,7 +215,7 @@ async function prepareRequestData(
             data: {
                 Name: name,
                 Id: id,
-                Image: image,
+                Image: dockerImage,
                 Env: Env || {},
                 Scripts: imageData?.Scripts || [],
                 Memory: parseInt(memory) || DEFAULT_MEMORY,

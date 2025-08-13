@@ -188,6 +188,9 @@ async function prepareRequestData(image, memory, cpu, ports, name, node, Id, var
   const rawImages = await db.get('images');
   const imageData = rawImages.find(i => i.Name === imagename);
 
+  // Ensure the Docker image name is lowercase to prevent "invalid reference format" errors
+  const dockerImage = imageData && imageData.Image ? imageData.Image.toLowerCase() : image.toLowerCase();
+
   const requestData = {
     method: 'post',
     url: `http://${node.address}:${node.port}/instances/create`,
@@ -201,7 +204,7 @@ async function prepareRequestData(image, memory, cpu, ports, name, node, Id, var
     data: {
       Name: name,
       Id,
-      Image: image,
+      Image: dockerImage,
       Env: imageData ? imageData.Env : undefined,
       Scripts: imageData ? imageData.Scripts : undefined,
       Memory: memory ? parseInt(memory) : undefined,

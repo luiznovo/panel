@@ -191,6 +191,9 @@ router.put("/instances/edit/:id", isAdmin, async (req, res) => {
 function prepareEditRequestData(instance, Image, Memory, Cpu) {
     const nodeUrl = `http://${instance.Node.address}:${instance.Node.port}`;
     
+    // Ensure the Docker image name is lowercase to prevent "invalid reference format" errors
+    const dockerImage = Image !== undefined ? Image.toLowerCase() : instance.Image.toLowerCase();
+    
     return {
         method: "put",
         url: `${nodeUrl}/instances/edit/${instance.ContainerId}`,
@@ -203,7 +206,7 @@ function prepareEditRequestData(instance, Image, Memory, Cpu) {
             "X-Requested-By": "Skyport-API",
         },
         data: {
-            Image: Image !== undefined ? Image : instance.Image,
+            Image: dockerImage,
             Memory: Memory !== undefined ? Memory : instance.Memory,
             Cpu: Cpu !== undefined ? Cpu : instance.Cpu,
             VolumeId: instance.VolumeId,
@@ -233,7 +236,7 @@ async function updateInstanceInDatabase(
 ) {
     const updatedInstance = {
         ...instance,
-        Image: Image !== undefined ? Image : instance.Image,
+        Image: Image !== undefined ? Image.toLowerCase() : instance.Image.toLowerCase(),
         Memory: Memory !== undefined ? Memory : instance.Memory,
         Cpu: Cpu !== undefined ? Cpu : instance.Cpu,
         ContainerId: newContainerId,

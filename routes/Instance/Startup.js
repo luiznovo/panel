@@ -333,6 +333,9 @@ async function prepareRequestData(
     const rawImages = (await db.get("images")) || [];
     const imageData = rawImages.find((i) => i.Image === image);
 
+    // Ensure the Docker image name is lowercase to prevent "invalid reference format" errors
+    const dockerImage = imageData && imageData.Image ? imageData.Image.toLowerCase() : image.toLowerCase();
+
     const requestData = {
         method: "post",
         url: `http://${node.address}:${node.port}/instances/redeploy/${containerId}`,
@@ -346,7 +349,7 @@ async function prepareRequestData(
         data: {
             Name: name,
             Id: id,
-            Image: image,
+            Image: dockerImage,
             Env: Array.isArray(Env) ? Env : [],
             Scripts: imageData ? imageData.Scripts : undefined,
             Memory: memory ? parseInt(memory) : undefined,

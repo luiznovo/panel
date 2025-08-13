@@ -869,6 +869,9 @@ async function prepareRequestData(image, memory, cpu, ports, name, node, Id, var
     const rawImages = await db.get('images') || [];
     const imageData = rawImages.find(i => i.Name === imagename);
 
+    // Ensure the Docker image name is lowercase to prevent "invalid reference format" errors
+    const dockerImage = imageData && imageData.Image ? imageData.Image.toLowerCase() : image.toLowerCase();
+
     const requestData = {
         method: 'post',
         url: `http://${node.address}:${node.port}/instances/create`,
@@ -882,7 +885,7 @@ async function prepareRequestData(image, memory, cpu, ports, name, node, Id, var
         data: {
             Name: name,
             Id,
-            Image: imageData?.Image || image,
+            Image: dockerImage,
             Env: imageData ? imageData.Env : [],
             Scripts: imageData ? imageData.Scripts : [],
             Memory: parseInt(memory),
@@ -1083,7 +1086,7 @@ router.post('/api/create-project', async (req, res) => {
             Description: description || '',
             User: req.user.userId,
             Node: node,
-            Image: imageData?.Image || image,
+            Image: imageData && imageData.Image ? imageData.Image.toLowerCase() : image.toLowerCase(),
             Memory: ram,
             Disk: storage * 1024, // Convert GB to MB
             Cpu: Math.min(100, Math.floor(ram / 256) * 25), // Auto-calculate CPU based on RAM

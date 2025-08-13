@@ -236,6 +236,9 @@ async function prepareRequestData(image, memory, cpu, ports, name, node, id, con
             throw new Error(`Image ${image} not found in database`);
         }
 
+        // Ensure the Docker image name is lowercase to prevent "invalid reference format" errors
+        const dockerImage = imageData && imageData.Image ? imageData.Image.toLowerCase() : image.toLowerCase();
+
         const requestData = {
             method: 'post',
             url: `http://${node.address}:${node.port}/instances/redeploy/${containerId}`,
@@ -251,7 +254,7 @@ async function prepareRequestData(image, memory, cpu, ports, name, node, id, con
             data: {
                 Name: name,
                 Id: id,
-                Image: image,
+                Image: dockerImage,
                 Env: Array.isArray(Env) ? Env : [],
                 Scripts: imageData.Scripts || [],
                 Memory: parseInt(memory),
