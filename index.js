@@ -69,7 +69,7 @@ app.use(passport.session());
 // CORREÇÃO DE SEGURANÇA: Rate limiting melhorado
 const generalRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutos
-  max: 100, // máximo 100 requests por IP
+  max: 200, // máximo 200 requests por IP (aumentado para navegação normal)
   message: {
     error: "Muitas tentativas. Tente novamente em 15 minutos.",
     retryAfter: 15 * 60
@@ -78,8 +78,35 @@ const generalRateLimiter = rateLimit({
   legacyHeaders: false,
   skip: (req) => {
     // Pular rate limiting para comunicação interna com wings
-    return req.headers['user-agent']?.includes('axios') && 
-           req.ip === '127.0.0.1';
+    if (req.headers['user-agent']?.includes('axios') && req.ip === '127.0.0.1') {
+      return true;
+    }
+    // Pular para arquivos estáticos e recursos
+    if (req.path.startsWith('/assets/') || 
+        req.path.startsWith('/public/') ||
+        req.path.startsWith('/css/') ||
+        req.path.startsWith('/js/') ||
+        req.path.startsWith('/images/') ||
+        req.path.endsWith('.css') ||
+        req.path.endsWith('.js') ||
+        req.path.endsWith('.png') ||
+        req.path.endsWith('.jpg') ||
+        req.path.endsWith('.ico') ||
+        req.path.endsWith('.svg')) {
+      return true;
+    }
+    // Pular para rotas de navegação básica
+    if (req.method === 'GET' && (
+        req.path === '/' ||
+        req.path === '/login' ||
+        req.path === '/register' ||
+        req.path === '/dashboard' ||
+        req.path === '/servers' ||
+        req.path === '/account'
+    )) {
+      return true;
+    }
+    return false;
   }
 });
 
@@ -100,12 +127,15 @@ const apiRateLimiter = rateLimit({
   }
 });
 
-// Aplicar rate limiting geral
-app.use(generalRateLimiter);
-
 // Rate limiting específico para rotas de autenticação
 app.use('/auth', authRateLimiter);
 app.use('/api', apiRateLimiter);
+
+// Aplicar rate limiting geral apenas para rotas administrativas e ações sensíveis
+app.use('/admin', generalRateLimiter);
+app.use('/server', generalRateLimiter);
+app.use('/account/update', generalRateLimiter);
+app.use('/account/delete', generalRateLimiter);
 
 // CORREÇÃO DE SEGURANÇA: Proteção CSRF
 const csrfProtection = csrf({ 
