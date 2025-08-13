@@ -153,6 +153,9 @@
 
       <!-- Login Form -->
       <form method="POST" action="/auth/login" class="space-y-5 fade-in" id="loginForm">
+        <% if (typeof csrfToken !== 'undefined') { %>
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <% } %>
         <div class="space-y-4">
           <div>
             <label for="username" class="block text-sm font-medium text-gray-300 mb-2 flex items-center">

@@ -268,6 +268,9 @@
       </div>
 
       <form method="POST" action="/auth/register" id="registerForm" class="mb-4" novalidate>
+        <% if (typeof csrfToken !== 'undefined') { %>
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <% } %>
         <div class="form-group">
           <label for="username" class="label">Username</label>
           <input 
