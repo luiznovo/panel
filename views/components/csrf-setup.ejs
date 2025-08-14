@@ -1,0 +1,63 @@
+<!-- Universal CSRF Setup Component -->
+<!-- Include this in all pages that need CSRF protection -->
+
+<!-- Meta tag for CSRF token -->
+<meta name="csrf-token" content="<%= csrfToken %>">
+
+<!-- Global CSRF token variable -->
+<script>
+    window.csrfToken = '<%= csrfToken %>';
+</script>
+
+<!-- Universal CSRF handler script -->
+<script src="/js/csrf-universal.js"></script>
+
+<!-- Additional helper functions -->
+<script>
+    // Helper function to create forms with CSRF token
+    function createFormWithCSRF(action, method = 'POST') {
+        const form = document.createElement('form');
+        form.method = method;
+        form.action = action;
+        form.style.display = 'none';
+        
+        // Add CSRF token
+        const csrfInput = document.createElement('input');
+        csrfInput.type = 'hidden';
+        csrfInput.name = '_csrf';
+        csrfInput.value = window.csrfToken || '<%= csrfToken %>';
+        form.appendChild(csrfInput);
+        
+        return form;
+    }
+    
+    // Helper function to submit a form with CSRF
+    function submitWithCSRF(url, method = 'POST', data = {}) {
+        const form = createFormWithCSRF(url, method);
+        
+        // Add data fields
+        Object.keys(data).forEach(key => {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = key;
+            input.value = data[key];
+            form.appendChild(input);
+        });
+        
+        document.body.appendChild(form);
+        form.submit();
+    }
+    
+    // Helper function for AJAX requests with CSRF
+    function fetchWithCSRF(url, options = {}) {
+        options.headers = options.headers || {};
+        options.headers['X-CSRF-Token'] = window.csrfToken || '<%= csrfToken %>';
+        
+        return fetch(url, options);
+    }
+    
+    // Make helpers globally available
+    window.createFormWithCSRF = createFormWithCSRF;
+    window.submitWithCSRF = submitWithCSRF;
+    window.fetchWithCSRF = fetchWithCSRF;
+</script>

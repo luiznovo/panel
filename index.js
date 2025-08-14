@@ -187,6 +187,26 @@ app.use((req, res, next) => {
   next();
 });
 
+// Middleware universal para injetar token CSRF em formulários
+app.use((req, res, next) => {
+  const originalRender = res.render;
+  res.render = function(view, options, callback) {
+    if (typeof options === 'function') {
+      callback = options;
+      options = {};
+    }
+    options = options || {};
+    
+    // Garantir que o token CSRF esteja sempre disponível
+    if (res.locals.csrfToken && !options.csrfToken) {
+      options.csrfToken = res.locals.csrfToken;
+    }
+    
+    return originalRender.call(this, view, options, callback);
+  };
+  next();
+});
+
 /**
  * Generates a random 16-character hexadecimal string.
  *

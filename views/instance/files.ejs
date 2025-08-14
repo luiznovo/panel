@@ -618,6 +618,9 @@
 
          const xhr = new XMLHttpRequest();
          xhr.open('POST', '/instance/<%= req.params.id %>/files/upload<%= query %>', true);
+         
+         // Adicionar token CSRF no cabeçalho
+         xhr.setRequestHeader('X-CSRF-Token', '<%= csrfToken %>');
          xhr.upload.onprogress = function(e) {
             if (e.lengthComputable) {
                const percentComplete = (e.loaded / e.total) * 100;
@@ -684,7 +687,22 @@
          if (fileName) {
             const encodedFileName = encodeURIComponent(fileName);
             const createUrl = `/instance/<%= req.params.id %>/files/create/${encodedFileName}<%= query %>`;
-            window.location.href = createUrl;
+            
+            // Criar um formulário temporário com token CSRF
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = createUrl;
+            form.style.display = 'none';
+            
+            // Adicionar token CSRF
+            const csrfInput = document.createElement('input');
+            csrfInput.type = 'hidden';
+            csrfInput.name = '_csrf';
+            csrfInput.value = '<%= csrfToken %>';
+            form.appendChild(csrfInput);
+            
+            document.body.appendChild(form);
+            form.submit();
          }
       }
 
@@ -709,7 +727,22 @@
          if (folderName) {
             const encodedFolderName = encodeURIComponent(folderName);
             const createUrl = `/instance/<%= req.params.id %>/files/create-folder/${encodedFolderName}<%= query %>`;
-            window.location.href = createUrl;
+            
+            // Criar um formulário temporário com token CSRF
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = createUrl;
+            form.style.display = 'none';
+            
+            // Adicionar token CSRF
+            const csrfInput = document.createElement('input');
+            csrfInput.type = 'hidden';
+            csrfInput.name = '_csrf';
+            csrfInput.value = '<%= csrfToken %>';
+            form.appendChild(csrfInput);
+            
+            document.body.appendChild(form);
+            form.submit();
          }
       }
 
@@ -912,7 +945,13 @@
          closeMassDeleteModal();
 
          const deletePromises = selectedFiles.map(fileName => 
-            fetch(`/instance/<%= req.params.id %>/files/delete/${encodeURIComponent(fileName)}<%= query %>`, { method: 'GET' })
+            fetch(`/instance/<%= req.params.id %>/files/delete/${encodeURIComponent(fileName)}<%= query %>`, { 
+               method: 'POST',
+               headers: {
+                  'X-CSRF-Token': '<%= csrfToken %>',
+                  'Content-Type': 'application/json'
+               }
+            })
          );
 
          try {
@@ -935,7 +974,13 @@
          const pathParam = extractPath ? `&destination=${encodeURIComponent(extractPath)}` : '';
 
          const extractPromises = archiveFiles.map(fileName => 
-            fetch(`/instance/<%= req.params.id %>/files/unzip/${encodeURIComponent(fileName)}<%= query %>${pathParam}`, { method: 'GET' })
+            fetch(`/instance/<%= req.params.id %>/files/unzip/${encodeURIComponent(fileName)}<%= query %>${pathParam}`, { 
+               method: 'POST',
+               headers: {
+                  'X-CSRF-Token': '<%= csrfToken %>',
+                  'Content-Type': 'application/json'
+               }
+            })
          );
 
          try {
