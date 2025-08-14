@@ -1547,8 +1547,9 @@ router.get("/admin/avisos", isAdmin, async (req, res) => {
   }
 });
 
-router.post("/admin/avisos/create", isAdmin, logSensitiveAction, async (req, res) => {
+router.post("/admin/avisos/create", isAdmin, async (req, res) => {
   try {
+    console.log('Creating aviso:', req.body);
     const { titulo, descricao, modelo, ativo } = req.body;
     
     if (!titulo || !descricao || !modelo) {
@@ -1569,7 +1570,8 @@ router.post("/admin/avisos/create", isAdmin, logSensitiveAction, async (req, res
 
     avisos.push(novoAviso);
     await db.set("avisos", JSON.stringify(avisos));
-
+    
+    console.log('Aviso created successfully, redirecting...');
     res.redirect("/admin/avisos");
   } catch (err) {
     console.error("Error creating aviso:", err);
@@ -1577,7 +1579,7 @@ router.post("/admin/avisos/create", isAdmin, logSensitiveAction, async (req, res
   }
 });
 
-router.post("/admin/avisos/update/:id", isAdmin, logSensitiveAction, async (req, res) => {
+router.post("/admin/avisos/update/:id", isAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const { titulo, descricao, modelo, ativo } = req.body;
@@ -1611,7 +1613,7 @@ router.post("/admin/avisos/update/:id", isAdmin, logSensitiveAction, async (req,
   }
 });
 
-router.post("/admin/avisos/delete/:id", isAdmin, logSensitiveAction, async (req, res) => {
+router.post("/admin/avisos/delete/:id", isAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     
