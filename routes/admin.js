@@ -1569,8 +1569,8 @@ router.post("/admin/avisos/create", isAdmin, async (req, res) => {
     };
 
     avisos.push(novoAviso);
+    console.log('Saving avisos to DB:', JSON.stringify(avisos, null, 2));
     await db.set("avisos", JSON.stringify(avisos));
-    
     console.log('Aviso created successfully, redirecting...');
     res.redirect("/admin/avisos");
   } catch (err) {

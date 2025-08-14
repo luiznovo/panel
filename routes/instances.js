@@ -13,6 +13,7 @@ router.get('/instances', isAuthenticated, async (req, res) => {
     // Buscar avisos ativos
     let avisos = await db.get('avisos');
     console.log('Raw avisos from DB:', avisos);
+    console.log('Type of avisos from DB:', typeof avisos);
     avisos = avisos ? JSON.parse(avisos) : [];
     console.log('Parsed avisos:', avisos);
     avisos.forEach((aviso, index) => {
