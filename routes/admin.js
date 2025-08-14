@@ -1539,6 +1539,7 @@ router.get("/admin/avisos", isAdmin, async (req, res) => {
       name: (await db.get("name")) || "DracoPanel",
       logo: (await db.get("logo")) || false,
       avisos,
+      csrfToken: req.csrfToken(),
     });
   } catch (err) {
     console.error("Error fetching avisos:", err);

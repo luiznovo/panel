@@ -1,6 +1,7 @@
 <%- include('../components/admin_template') %>
 
-<main id="content" class="bg-gradient-to-br from-gray-900 to-gray-800 min-h-screen">
+<div class="flex flex-col min-h-screen">
+<main id="content" class="bg-gradient-to-br from-gray-900 to-gray-800 flex-1">
   <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8">
     <!-- Header Section -->
     <div class="flex flex-col md:flex-row justify-between items-start gap-4 md:gap-6 mb-6 md:mb-8">
@@ -80,6 +81,7 @@
                       Editar
                     </button>
                     <form method="POST" action="/admin/avisos/delete/<%= aviso.id %>" class="inline" onsubmit="return confirm('Tem certeza que deseja excluir este aviso?')">
+                      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                       <button 
                         type="submit" 
                         class="inline-flex items-center px-3 py-1.5 border border-red-600 rounded-md bg-red-600 hover:bg-red-700 text-white text-sm transition-colors"
@@ -112,6 +114,7 @@
         </button>
       </div>
       <form method="POST" action="/admin/avisos/create">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
         <div class="space-y-4">
           <div>
             <label for="titulo" class="block text-sm font-medium text-gray-300 mb-1">Título</label>
@@ -159,6 +162,7 @@
         </button>
       </div>
       <form id="editForm" method="POST">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
         <div class="space-y-4">
           <div>
             <label for="editTitulo" class="block text-sm font-medium text-gray-300 mb-1">Título</label>
@@ -194,6 +198,15 @@
     </div>
   </div>
 </main>
+
+<!-- Footer -->
+<footer class="bg-gray-800 border-t border-gray-700 mt-auto">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+    <div class="text-center text-sm text-gray-400">
+      <p>&copy; 2024 <%= name %>. Todos os direitos reservados.</p>
+    </div>
+  </div>
+</footer>
 
 <script>
   function openCreateModal() {
@@ -239,4 +252,4 @@
   });
 </script>
 
-<%- include('../components/footer') %>
+</div>
