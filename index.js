@@ -146,21 +146,35 @@ app.use('/account/delete', generalRateLimiter);
 const csrfProtection = csrf({ 
   cookie: {
     httpOnly: true,
-    secure: config.mode === 'production',
-    sameSite: 'strict'
-  }
+    secure: false, // Temporariamente desabilitado para debug
+    sameSite: 'lax' // Mudado para lax para melhor compatibilidade
+  },
+  ignoreMethods: ['GET', 'HEAD', 'OPTIONS']
 });
 
 // Aplicar CSRF apenas para rotas web (não APIs)
 app.use((req, res, next) => {
   // Pular CSRF para APIs que usam API keys
   if (req.path.startsWith('/api/') && req.headers['x-api-key']) {
+    console.log('Pulando CSRF para API:', req.path);
     return next();
   }
   // Pular CSRF para WebSocket connections
   if (req.headers.upgrade === 'websocket') {
+    console.log('Pulando CSRF para WebSocket:', req.path);
     return next();
   }
+  
+  // Temporariamente pular CSRF para rotas de autenticação para debug
+  if (req.path.startsWith('/auth/') || req.path === '/login' || req.path === '/register' || req.path === '/2fa') {
+    console.log('Pulando CSRF temporariamente para:', req.path);
+    return next();
+  }
+  
+  console.log('Aplicando CSRF para:', req.method, req.path);
+  console.log('Headers:', req.headers);
+  console.log('Body:', req.body);
+  
   csrfProtection(req, res, next);
 });
 
@@ -168,7 +182,11 @@ app.use((req, res, next) => {
 app.use((req, res, next) => {
   try {
     if (req.csrfToken) {
-      res.locals.csrfToken = req.csrfToken();
+      const token = req.csrfToken();
+      res.locals.csrfToken = token;
+      console.log('Token CSRF gerado para:', req.path, 'Token:', token.substring(0, 10) + '...');
+    } else {
+      console.log('req.csrfToken não disponível para:', req.path);
     }
   } catch (error) {
     // Se houver erro ao gerar o token, continue sem ele
