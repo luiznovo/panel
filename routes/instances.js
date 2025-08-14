@@ -15,7 +15,10 @@ router.get('/instances', isAuthenticated, async (req, res) => {
     console.log('Raw avisos from DB:', avisos);
     avisos = avisos ? JSON.parse(avisos) : [];
     console.log('Parsed avisos:', avisos);
-    const avisosAtivos = avisos.filter(aviso => aviso.ativo);
+    avisos.forEach((aviso, index) => {
+      console.log(`Aviso ${index}: ativo = ${aviso.ativo} (type: ${typeof aviso.ativo})`);
+    });
+    const avisosAtivos = avisos.filter(aviso => aviso.ativo === true);
     console.log('Active avisos:', avisosAtivos);
 
     // Buscar outras informações necessárias para a página

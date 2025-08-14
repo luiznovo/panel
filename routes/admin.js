@@ -1560,11 +1560,11 @@ router.post("/admin/avisos/create", isAdmin, async (req, res) => {
     avisos = avisos ? JSON.parse(avisos) : [];
 
     const novoAviso = {
-      id: Date.now().toString(),
+      id: uuidv4(),
       titulo,
       descricao,
       modelo,
-      ativo: ativo === 'on',
+      ativo: ativo === 'on' ? true : false,
       criadoEm: new Date().toISOString()
     };
 
@@ -1601,7 +1601,7 @@ router.post("/admin/avisos/update/:id", isAdmin, async (req, res) => {
       titulo,
       descricao,
       modelo,
-      ativo: ativo === 'on',
+      ativo: ativo === 'on' ? true : false,
       atualizadoEm: new Date().toISOString()
     };
 
