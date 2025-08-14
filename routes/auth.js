@@ -40,8 +40,6 @@ router.use(passport.session());
 passport.use(
   new LocalStrategy(async (username, password, done) => {
     try {
-      console.log('Tentativa de login para usuário:', username);
-      
       // CORREÇÃO DE SEGURANÇA: Rate limiting por IP e usuário
       const clientIp = done.req?.ip || done.req?.connection?.remoteAddress || 'unknown';
       const attemptKey = `${clientIp}:${username}`;
@@ -280,24 +278,15 @@ router.post(
   }),
   async (req, res, next) => {
     try {
-      console.log('POST /auth/login - req.user:', req.user);
-      console.log('POST /auth/login - req.isAuthenticated():', req.isAuthenticated());
-      
       if (req.user) {
         const users = await db.get("users");
         const user = users.find((u) => u.username === req.user.username);
         
-        console.log('Usuário encontrado no banco:', user ? 'Sim' : 'Não');
-        console.log('Usuário verificado:', user?.verified);
-        console.log('2FA habilitado:', user?.twoFAEnabled);
-
         if (user && user.verified) {
-          console.log('Redirecionando para /instances (usuário verificado)');
           return res.redirect("/instances");
         }
 
         if (user && user.twoFAEnabled) {
-          console.log('Redirecionando para /2fa (2FA habilitado)');
           req.session.tempUser = req.user;
           req.logout((err) => {
             if (err) {
@@ -306,11 +295,9 @@ router.post(
             return res.redirect("/2fa");
           });
         } else {
-          console.log('Redirecionando para /instances (usuário não verificado ou sem 2FA)');
           return res.redirect("/instances");
         }
       } else {
-        console.log('req.user não existe, redirecionando para login com erro');
         return res.redirect("/login?err=InvalidCredentials&state=failed");
       }
     } catch (error) {

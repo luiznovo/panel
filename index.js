@@ -49,9 +49,10 @@ app.use(
     resave: false,
     saveUninitialized: false,
     cookie: {
-      secure: config.mode === 'production',
+      secure: false, // Desabilitado para permitir HTTP
       httpOnly: true,
-      maxAge: 24 * 60 * 60 * 1000 // 24 horas
+      maxAge: 24 * 60 * 60 * 1000, // 24 horas
+      sameSite: 'lax' // Melhor compatibilidade
     }
   }),
 );
@@ -165,15 +166,10 @@ app.use((req, res, next) => {
     return next();
   }
   
-  // Temporariamente pular CSRF para rotas de autenticação para debug
+  // Pular CSRF para rotas de autenticação
   if (req.path.startsWith('/auth/') || req.path === '/login' || req.path === '/register' || req.path === '/2fa') {
-    console.log('Pulando CSRF temporariamente para:', req.path);
     return next();
   }
-  
-  console.log('Aplicando CSRF para:', req.method, req.path);
-  console.log('Headers:', req.headers);
-  console.log('Body:', req.body);
   
   csrfProtection(req, res, next);
 });
@@ -182,11 +178,7 @@ app.use((req, res, next) => {
 app.use((req, res, next) => {
   try {
     if (req.csrfToken) {
-      const token = req.csrfToken();
-      res.locals.csrfToken = token;
-      console.log('Token CSRF gerado para:', req.path, 'Token:', token.substring(0, 10) + '...');
-    } else {
-      console.log('req.csrfToken não disponível para:', req.path);
+      res.locals.csrfToken = req.csrfToken();
     }
   } catch (error) {
     // Se houver erro ao gerar o token, continue sem ele

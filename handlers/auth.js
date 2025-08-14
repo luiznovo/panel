@@ -19,16 +19,9 @@ const { db } = require('./db');
  * @returns {void} Does not return a value; either calls the next middleware in the stack or redirects.
  */
 function isAuthenticated(req, res, next) {
-  console.log('Middleware isAuthenticated - Rota:', req.path);
-  console.log('Middleware isAuthenticated - req.isAuthenticated():', req.isAuthenticated());
-  console.log('Middleware isAuthenticated - req.user:', req.user);
-  console.log('Middleware isAuthenticated - req.session:', req.session);
-  
   if (req.isAuthenticated()) {
-    console.log('Usuário autenticado, prosseguindo...');
     return next();
   }
-  console.log('Usuário NÃO autenticado, redirecionando para /login');
   res.redirect('/login');
 }
 
