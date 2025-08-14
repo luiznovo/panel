@@ -46,8 +46,13 @@ app.use(
       },
     }),
     secret: config.session_secret || "secret",
-    resave: true,
-    saveUninitialized: true,
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      secure: config.mode === 'production',
+      httpOnly: true,
+      maxAge: 24 * 60 * 60 * 1000 // 24 horas
+    }
   }),
 );
 
@@ -161,8 +166,13 @@ app.use((req, res, next) => {
 
 // Disponibilizar token CSRF para views
 app.use((req, res, next) => {
-  if (req.csrfToken) {
-    res.locals.csrfToken = req.csrfToken();
+  try {
+    if (req.csrfToken) {
+      res.locals.csrfToken = req.csrfToken();
+    }
+  } catch (error) {
+    // Se houver erro ao gerar o token, continue sem ele
+    console.warn('Erro ao gerar token CSRF:', error.message);
   }
   next();
 });

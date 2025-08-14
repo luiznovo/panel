@@ -348,6 +348,34 @@ router.post("/2fa", async (req, res) => {
   }
 });
 
+// Rota GET para renderizar a página de login
+router.get("/login", async (req, res) => {
+  try {
+    res.render("auth/login", {
+      req,
+      name: (await db.get("name")) || "HydraPanel",
+      logo: (await db.get("logo")) || false,
+    });
+  } catch (error) {
+    console.error("Error rendering login page:", error);
+    res.status(500).send("Internal server error");
+  }
+});
+
+// Rota GET para renderizar a página de registro
+router.get("/register", async (req, res) => {
+  try {
+    res.render("auth/register", {
+      req,
+      name: (await db.get("name")) || "HydraPanel",
+      logo: (await db.get("logo")) || false,
+    });
+  } catch (error) {
+    console.error("Error rendering register page:", error);
+    res.status(500).send("Internal server error");
+  }
+});
+
 router.get(
   "/auth/login",
   passport.authenticate("local", {
