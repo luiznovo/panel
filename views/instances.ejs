@@ -1,8 +1,5 @@
 <%- include('components/template') %>
 <main class="container flex-grow px-4 py-8 mx-auto animate-fade-in md:px-6 lg:px-8">
-  <!-- Debug: Avisos -->
-  <script>console.log('Avisos na view:', <%- JSON.stringify(avisos || []) %>);</script>
-  
   <!-- Avisos Section -->
   <% if (typeof avisos !== 'undefined' && avisos.length > 0) { %>
     <div class="mb-6 space-y-3">

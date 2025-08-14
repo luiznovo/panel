@@ -119,12 +119,18 @@ router.get("/instances", isAuthenticated, async (req, res) => {
             }
         }
 
+        // Buscar avisos ativos
+        let avisos = await db.get('avisos');
+        avisos = avisos ? JSON.parse(avisos) : [];
+        const avisosAtivos = avisos.filter(aviso => aviso.ativo === true);
+
         res.render("instances", {
             req,
             user: req.user,
             name: (await db.get("name")) || "HydraPanel",
             logo: (await db.get("logo")) || false,
             instances,
+            avisos: avisosAtivos,
             config: require("../../config.json"),
         });
     } catch (error) {
