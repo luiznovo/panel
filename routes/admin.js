@@ -1528,4 +1528,103 @@ router.get("/admin/auditlogs", isAdmin, async (req, res) => {
   }
 });
 
+// Rotas para sistema de avisos
+router.get("/admin/avisos", isAdmin, async (req, res) => {
+  try {
+    let avisos = await db.get("avisos");
+    avisos = avisos ? JSON.parse(avisos) : [];
+    res.render("admin/avisos", {
+      req,
+      user: req.user,
+      name: (await db.get("name")) || "DracoPanel",
+      logo: (await db.get("logo")) || false,
+      avisos,
+    });
+  } catch (err) {
+    console.error("Error fetching avisos:", err);
+    res.status(500).send("Internal Server Error");
+  }
+});
+
+router.post("/admin/avisos/create", isAdmin, logSensitiveAction, async (req, res) => {
+  try {
+    const { titulo, descricao, modelo, ativo } = req.body;
+    
+    if (!titulo || !descricao || !modelo) {
+      return res.status(400).json({ error: "Todos os campos são obrigatórios" });
+    }
+
+    let avisos = await db.get("avisos");
+    avisos = avisos ? JSON.parse(avisos) : [];
+
+    const novoAviso = {
+      id: Date.now().toString(),
+      titulo,
+      descricao,
+      modelo,
+      ativo: ativo === 'on',
+      criadoEm: new Date().toISOString()
+    };
+
+    avisos.push(novoAviso);
+    await db.set("avisos", JSON.stringify(avisos));
+
+    res.redirect("/admin/avisos");
+  } catch (err) {
+    console.error("Error creating aviso:", err);
+    res.status(500).send("Internal Server Error");
+  }
+});
+
+router.post("/admin/avisos/update/:id", isAdmin, logSensitiveAction, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { titulo, descricao, modelo, ativo } = req.body;
+    
+    if (!titulo || !descricao || !modelo) {
+      return res.status(400).json({ error: "Todos os campos são obrigatórios" });
+    }
+
+    let avisos = await db.get("avisos");
+    avisos = avisos ? JSON.parse(avisos) : [];
+
+    const avisoIndex = avisos.findIndex(aviso => aviso.id === id);
+    if (avisoIndex === -1) {
+      return res.status(404).json({ error: "Aviso não encontrado" });
+    }
+
+    avisos[avisoIndex] = {
+      ...avisos[avisoIndex],
+      titulo,
+      descricao,
+      modelo,
+      ativo: ativo === 'on',
+      atualizadoEm: new Date().toISOString()
+    };
+
+    await db.set("avisos", JSON.stringify(avisos));
+    res.redirect("/admin/avisos");
+  } catch (err) {
+    console.error("Error updating aviso:", err);
+    res.status(500).send("Internal Server Error");
+  }
+});
+
+router.post("/admin/avisos/delete/:id", isAdmin, logSensitiveAction, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    let avisos = await db.get("avisos");
+    avisos = avisos ? JSON.parse(avisos) : [];
+
+    avisos = avisos.filter(aviso => aviso.id !== id);
+    await db.set("avisos", JSON.stringify(avisos));
+
+    res.redirect("/admin/avisos");
+  } catch (err) {
+    console.error("Error deleting aviso:", err);
+    res.status(500).send("Internal Server Error");
+  }
+});
+
 module.exports = router;

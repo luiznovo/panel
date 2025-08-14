@@ -1,0 +1,242 @@
+<%- include('../components/admin_template') %>
+
+<main id="content" class="bg-gradient-to-br from-gray-900 to-gray-800 min-h-screen">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8">
+    <!-- Header Section -->
+    <div class="flex flex-col md:flex-row justify-between items-start gap-4 md:gap-6 mb-6 md:mb-8">
+      <div>
+        <h1 class="text-2xl md:text-3xl font-bold text-white">Gerenciar Avisos</h1>
+        <p class="mt-1 md:mt-2 text-sm md:text-base text-gray-400">Configure avisos que serão exibidos para todos os usuários</p>
+      </div>
+      <button 
+        onclick="openCreateModal()" 
+        class="inline-flex items-center px-4 py-2 border border-transparent rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-medium transition-colors"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+        </svg>
+        Criar Aviso
+      </button>
+    </div>
+
+    <!-- Avisos List -->
+    <div class="bg-gray-800/50 backdrop-blur-sm rounded-xl border border-gray-700/50 shadow-xl">
+      <div class="p-6">
+        <% if (avisos.length === 0) { %>
+          <div class="text-center py-12">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 mx-auto text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" />
+            </svg>
+            <h3 class="text-lg font-medium text-white mb-2">Nenhum aviso criado</h3>
+            <p class="text-gray-400 mb-6">Crie seu primeiro aviso para começar a comunicar com os usuários.</p>
+            <button 
+              onclick="openCreateModal()" 
+              class="inline-flex items-center px-4 py-2 border border-transparent rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-medium transition-colors"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+              </svg>
+              Criar Primeiro Aviso
+            </button>
+          </div>
+        <% } else { %>
+          <div class="space-y-4">
+            <% avisos.forEach(aviso => { %>
+              <div class="bg-gray-700/30 rounded-lg p-4 border border-gray-600/50">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div class="flex-1">
+                    <div class="flex items-center gap-3 mb-2">
+                      <h3 class="text-lg font-semibold text-white"><%= aviso.titulo %></h3>
+                      <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                        <% if (aviso.modelo === 'green') { %>bg-green-100 text-green-800<% } %>
+                        <% if (aviso.modelo === 'red') { %>bg-red-100 text-red-800<% } %>
+                        <% if (aviso.modelo === 'yellow') { %>bg-yellow-100 text-yellow-800<% } %>
+                        <% if (aviso.modelo === 'gray') { %>bg-gray-100 text-gray-800<% } %>
+                      ">
+                        <%= aviso.modelo %>
+                      </span>
+                      <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                        <%= aviso.ativo ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800' %>
+                      ">
+                        <%= aviso.ativo ? 'Ativo' : 'Inativo' %>
+                      </span>
+                    </div>
+                    <p class="text-gray-300 text-sm mb-2"><%= aviso.descricao %></p>
+                    <p class="text-xs text-gray-500">
+                      Criado em: <%= new Date(aviso.criadoEm).toLocaleDateString('pt-BR') %>
+                      <% if (aviso.atualizadoEm) { %>
+                        | Atualizado em: <%= new Date(aviso.atualizadoEm).toLocaleDateString('pt-BR') %>
+                      <% } %>
+                    </p>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <button 
+                      onclick="openEditModal('<%= aviso.id %>', '<%= aviso.titulo %>', '<%= aviso.descricao %>', '<%= aviso.modelo %>', <%= aviso.ativo %>)" 
+                      class="inline-flex items-center px-3 py-1.5 border border-gray-600 rounded-md bg-gray-700 hover:bg-gray-600 text-white text-sm transition-colors"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      </svg>
+                      Editar
+                    </button>
+                    <form method="POST" action="/admin/avisos/delete/<%= aviso.id %>" class="inline" onsubmit="return confirm('Tem certeza que deseja excluir este aviso?')">
+                      <button 
+                        type="submit" 
+                        class="inline-flex items-center px-3 py-1.5 border border-red-600 rounded-md bg-red-600 hover:bg-red-700 text-white text-sm transition-colors"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                        Excluir
+                      </button>
+                    </form>
+                  </div>
+                </div>
+              </div>
+            <% }); %>
+          </div>
+        <% } %>
+      </div>
+    </div>
+  </div>
+
+  <!-- Create Modal -->
+  <div id="createModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center p-4">
+    <div class="bg-gray-800 rounded-xl max-w-md w-full p-6 border border-gray-700">
+      <div class="flex justify-between items-center mb-4">
+        <h2 class="text-xl font-bold text-white">Criar Novo Aviso</h2>
+        <button onclick="closeCreateModal()" class="text-gray-400 hover:text-white">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+      <form method="POST" action="/admin/avisos/create">
+        <div class="space-y-4">
+          <div>
+            <label for="titulo" class="block text-sm font-medium text-gray-300 mb-1">Título</label>
+            <input type="text" id="titulo" name="titulo" required class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+          </div>
+          <div>
+            <label for="descricao" class="block text-sm font-medium text-gray-300 mb-1">Descrição</label>
+            <textarea id="descricao" name="descricao" rows="3" required class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"></textarea>
+          </div>
+          <div>
+            <label for="modelo" class="block text-sm font-medium text-gray-300 mb-1">Modelo (Cor)</label>
+            <select id="modelo" name="modelo" required class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+              <option value="green">Verde (Sucesso)</option>
+              <option value="yellow">Amarelo (Aviso)</option>
+              <option value="red">Vermelho (Erro)</option>
+              <option value="gray">Cinza (Informação)</option>
+            </select>
+          </div>
+          <div class="flex items-center">
+            <input type="checkbox" id="ativo" name="ativo" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-600 rounded bg-gray-700">
+            <label for="ativo" class="ml-2 block text-sm text-gray-300">Aviso ativo</label>
+          </div>
+        </div>
+        <div class="flex justify-end gap-3 mt-6">
+          <button type="button" onclick="closeCreateModal()" class="px-4 py-2 border border-gray-600 rounded-md text-gray-300 hover:bg-gray-700 transition-colors">
+            Cancelar
+          </button>
+          <button type="submit" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md transition-colors">
+            Criar Aviso
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Edit Modal -->
+  <div id="editModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center p-4">
+    <div class="bg-gray-800 rounded-xl max-w-md w-full p-6 border border-gray-700">
+      <div class="flex justify-between items-center mb-4">
+        <h2 class="text-xl font-bold text-white">Editar Aviso</h2>
+        <button onclick="closeEditModal()" class="text-gray-400 hover:text-white">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+      <form id="editForm" method="POST">
+        <div class="space-y-4">
+          <div>
+            <label for="editTitulo" class="block text-sm font-medium text-gray-300 mb-1">Título</label>
+            <input type="text" id="editTitulo" name="titulo" required class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+          </div>
+          <div>
+            <label for="editDescricao" class="block text-sm font-medium text-gray-300 mb-1">Descrição</label>
+            <textarea id="editDescricao" name="descricao" rows="3" required class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"></textarea>
+          </div>
+          <div>
+            <label for="editModelo" class="block text-sm font-medium text-gray-300 mb-1">Modelo (Cor)</label>
+            <select id="editModelo" name="modelo" required class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+              <option value="green">Verde (Sucesso)</option>
+              <option value="yellow">Amarelo (Aviso)</option>
+              <option value="red">Vermelho (Erro)</option>
+              <option value="gray">Cinza (Informação)</option>
+            </select>
+          </div>
+          <div class="flex items-center">
+            <input type="checkbox" id="editAtivo" name="ativo" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-600 rounded bg-gray-700">
+            <label for="editAtivo" class="ml-2 block text-sm text-gray-300">Aviso ativo</label>
+          </div>
+        </div>
+        <div class="flex justify-end gap-3 mt-6">
+          <button type="button" onclick="closeEditModal()" class="px-4 py-2 border border-gray-600 rounded-md text-gray-300 hover:bg-gray-700 transition-colors">
+            Cancelar
+          </button>
+          <button type="submit" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md transition-colors">
+            Salvar Alterações
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</main>
+
+<script>
+  function openCreateModal() {
+    document.getElementById('createModal').classList.remove('hidden');
+  }
+
+  function closeCreateModal() {
+    document.getElementById('createModal').classList.add('hidden');
+  }
+
+  function openEditModal(id, titulo, descricao, modelo, ativo) {
+    document.getElementById('editForm').action = `/admin/avisos/update/${id}`;
+    document.getElementById('editTitulo').value = titulo;
+    document.getElementById('editDescricao').value = descricao;
+    document.getElementById('editModelo').value = modelo;
+    document.getElementById('editAtivo').checked = ativo;
+    document.getElementById('editModal').classList.remove('hidden');
+  }
+
+  function closeEditModal() {
+    document.getElementById('editModal').classList.add('hidden');
+  }
+
+  // Close modals when clicking outside
+  document.getElementById('createModal').addEventListener('click', function(e) {
+    if (e.target === this) {
+      closeCreateModal();
+    }
+  });
+
+  document.getElementById('editModal').addEventListener('click', function(e) {
+    if (e.target === this) {
+      closeEditModal();
+    }
+  });
+
+  // Close modals with Escape key
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+      closeCreateModal();
+      closeEditModal();
+    }
+  });
+</script>
+
+<%- include('../components/footer') %>
