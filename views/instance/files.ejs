@@ -769,7 +769,21 @@
       }
 
       document.getElementById('confirmDelete').addEventListener('click', function() {
-         window.location.href = deleteUrl;
+         // Criar um formulário temporário com token CSRF para delete
+         const form = document.createElement('form');
+         form.method = 'POST';
+         form.action = deleteUrl;
+         form.style.display = 'none';
+         
+         // Adicionar token CSRF
+         const csrfInput = document.createElement('input');
+         csrfInput.type = 'hidden';
+         csrfInput.name = '_csrf';
+         csrfInput.value = '<%= csrfToken %>';
+         form.appendChild(csrfInput);
+         
+         document.body.appendChild(form);
+         form.submit();
       });
 
       // Rename functionality
@@ -804,7 +818,22 @@
          if (newFileName && newFileName !== currentFileName) {
             const encodedNewFileName = encodeURIComponent(newFileName);
             const renameUrl = `/instance/<%= req.params.id %>/files/rename/${encodeURIComponent(currentFileName)}/${encodedNewFileName}${currentExtension}`;
-            window.location.href = renameUrl;
+            
+            // Criar um formulário temporário com token CSRF para rename
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = renameUrl;
+            form.style.display = 'none';
+            
+            // Adicionar token CSRF
+            const csrfInput = document.createElement('input');
+            csrfInput.type = 'hidden';
+            csrfInput.name = '_csrf';
+            csrfInput.value = '<%= csrfToken %>';
+            form.appendChild(csrfInput);
+            
+            document.body.appendChild(form);
+            form.submit();
          } else {
             closeRenameModal();
          }
@@ -844,7 +873,22 @@
       document.getElementById('confirmExtract').addEventListener('click', function() {
          const extractPath = document.getElementById('extractPath').value.trim();
          const finalUrl = extractPath ? `${extractUrl}&destination=${encodeURIComponent(extractPath)}` : extractUrl;
-         window.location.href = finalUrl;
+         
+         // Criar um formulário temporário com token CSRF para extract
+         const form = document.createElement('form');
+         form.method = 'POST';
+         form.action = finalUrl;
+         form.style.display = 'none';
+         
+         // Adicionar token CSRF
+         const csrfInput = document.createElement('input');
+         csrfInput.type = 'hidden';
+         csrfInput.name = '_csrf';
+         csrfInput.value = '<%= csrfToken %>';
+         form.appendChild(csrfInput);
+         
+         document.body.appendChild(form);
+         form.submit();
       });
 
       // Mass actions functionality
