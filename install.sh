@@ -50,11 +50,11 @@ ask_yes_no() {
     
     while true; do
         if [ "$default" = "y" ]; then
-            log_question "$question [Y/n]: "
+            echo -n "${YELLOW}[?]${NC} $question [Y/n]: "
         else
-            log_question "$question [y/N]: "
+            echo -n "${YELLOW}[?]${NC} $question [y/N]: "
         fi
-        read -r answer
+        read -r answer </dev/tty
         
         # Se resposta vazia, usar padrão
         if [ -z "$answer" ]; then
@@ -76,12 +76,12 @@ ask_input() {
     local answer
     
     if [ -n "$default" ]; then
-        log_question "$question [padrão: $default]: "
+        echo -n "${YELLOW}[?]${NC} $question [padrão: $default]: "
     else
-        log_question "$question: "
+        echo -n "${YELLOW}[?]${NC} $question: "
     fi
     
-    read -r answer
+    read -r answer </dev/tty
     
     if [ -z "$answer" ] && [ -n "$default" ]; then
         echo "$default"
@@ -95,8 +95,8 @@ ask_password() {
     local question="$1"
     local answer
     
-    log_question "$question: "
-    read -s answer
+    echo -n "${YELLOW}[?]${NC} $question: "
+    read -s answer </dev/tty
     echo
     echo "$answer"
 }
