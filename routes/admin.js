@@ -877,6 +877,7 @@ router.get("/admin/settings", isAdmin, async (req, res) => {
     name: (await db.get("name")) || "DracoPanel",
     logo: (await db.get("logo")) || false,
     settings: await db.get("settings"),
+    csrfToken: req.csrfToken(),
   });
 });
 
@@ -923,6 +924,25 @@ router.post(
       res.redirect("/admin/settings");
     } catch (err) {
       console.error("Error toggling force verify:", err);
+      res.status(500).send("Internal Server Error");
+    }
+  },
+);
+
+router.post(
+  "/admin/settings/toggle/register",
+  isAdmin,
+  async (req, res) => {
+    try {
+      const settings = (await db.get("settings")) || {};
+      settings.register = !settings.register;
+
+      await db.set("settings", settings);
+      logAudit(req.user.userId, req.user.username, "register:edit", req.ip);
+
+      res.redirect("/admin/settings");
+    } catch (err) {
+      console.error("Error toggling register:", err);
       res.status(500).send("Internal Server Error");
     }
   },
@@ -1105,18 +1125,7 @@ router.post(
   },
 );
 
-router.post(
-  "/admin/settings/toggle/register",
-  isAdmin,
-  upload.single("logo"),
-  async (req, res) => {
-    let settings = await db.get("settings");
-    settings.register = !settings.register;
-    await db.set("settings", settings);
-    logAudit(req.user.userId, req.user.username, "register:edit", req.ip);
-    res.redirect("/admin/settings");
-  },
-);
+
 /**
  * GET /admin/instances
  * Retrieves a list of all instances, checks their statuses, and renders an admin page to display these instances.
