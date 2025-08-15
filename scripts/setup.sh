@@ -89,25 +89,71 @@ install_dependencies() {
 install_docker() {
     log_info "Instalando Docker..."
     
-    # Remover versões antigas
-    apt remove -y docker docker-engine docker.io containerd runc 2>/dev/null || true
-    
-    # Adicionar repositório Docker
-    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
-    
-    # Instalar Docker
-    apt update
-    apt install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+    # Verificar se Docker está instalado
+    if ! command -v docker &> /dev/null; then
+        log_warning "Docker não encontrado. Instalando..."
+        
+        # Remover versões antigas
+        apt remove -y docker docker-engine docker.io containerd runc 2>/dev/null || true
+        
+        # Atualizar repositórios
+        apt-get update
+        
+        # Instalar dependências
+        apt-get install -y apt-transport-https ca-certificates curl gnupg lsb-release
+        
+        # Adicionar chave GPG do Docker
+        curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+        
+        # Adicionar repositório do Docker
+        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+        
+        # Instalar Docker
+        apt-get update
+        apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+        
+        log_success "Docker instalado com sucesso"
+    else
+        log_success "Docker já está instalado"
+    fi
     
     # Iniciar e habilitar Docker
     systemctl start docker
     systemctl enable docker
     
+    # Verificar se Docker está rodando
+    if ! systemctl is-active --quiet docker; then
+        log_error "Falha ao iniciar Docker"
+        exit 1
+    fi
+    
     # Adicionar usuário ao grupo docker
     usermod -aG docker $PANEL_USER 2>/dev/null || true
     
-    log_success "Docker instalado"
+    log_success "Docker configurado"
+ }
+
+# Função para instalar Docker Compose
+install_docker_compose() {
+    log_info "Verificando Docker Compose..."
+    
+    if ! command -v docker-compose &> /dev/null; then
+        log_warning "Docker Compose não encontrado. Instalando..."
+        
+        # Baixar Docker Compose
+        DOCKER_COMPOSE_VERSION=$(curl -s https://api.github.com/repos/docker/compose/releases/latest | grep 'tag_name' | cut -d'"' -f4)
+        curl -L "https://github.com/docker/compose/releases/download/${DOCKER_COMPOSE_VERSION}/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+        
+        # Dar permissão de execução
+        chmod +x /usr/local/bin/docker-compose
+        
+        # Criar link simbólico
+        ln -sf /usr/local/bin/docker-compose /usr/bin/docker-compose
+        
+        log_success "Docker Compose instalado: $(docker-compose --version)"
+    else
+        log_success "Docker Compose já está instalado: $(docker-compose --version)"
+    fi
 }
 
 install_nodejs() {
