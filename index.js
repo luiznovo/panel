@@ -166,11 +166,6 @@ app.use((req, res, next) => {
     return next();
   }
   
-  // Pular CSRF para rotas de autenticação
-  if (req.path.startsWith('/auth/') || req.path === '/login' || req.path === '/register' || req.path === '/2fa') {
-    return next();
-  }
-  
   csrfProtection(req, res, next);
 });
 
