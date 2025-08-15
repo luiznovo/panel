@@ -315,6 +315,7 @@ router.get("/2fa", async (req, res) => {
     req,
     name: (await db.get("name")) || "HydraPanel",
     logo: (await db.get("logo")) || false,
+    csrfToken: req.csrfToken(),
   });
 });
 
@@ -355,6 +356,7 @@ router.get("/login", async (req, res) => {
       req,
       name: (await db.get("name")) || "HydraPanel",
       logo: (await db.get("logo")) || false,
+      csrfToken: req.csrfToken(),
     });
   } catch (error) {
     console.error("Error rendering login page:", error);
@@ -369,6 +371,7 @@ router.get("/register", async (req, res) => {
       req,
       name: (await db.get("name")) || "HydraPanel",
       logo: (await db.get("logo")) || false,
+      csrfToken: req.csrfToken(),
     });
   } catch (error) {
     console.error("Error rendering register page:", error);
@@ -527,6 +530,7 @@ router.get("/auth/reset-password", async (req, res) => {
       req,
       name: (await db.get("name")) || "HydraPanel",
       logo: (await db.get("logo")) || false,
+      csrfToken: req.csrfToken(),
     });
   } catch (error) {
     console.error("Error rendering reset password page:", error);
@@ -576,6 +580,7 @@ router.get("/auth/reset/:token", async (req, res) => {
       name: (await db.get("name")) || "HydraPanel",
       logo: (await db.get("logo")) || false,
       token: token,
+      csrfToken: req.csrfToken(),
     });
   } catch (error) {
     console.error("Error rendering password reset form:", error);
