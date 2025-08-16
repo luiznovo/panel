@@ -1,5 +1,5 @@
 # Multi-stage build para otimização
-FROM node:18-slim AS builder
+FROM node:20-bookworm AS builder
 
 # Instalar dependências necessárias para compilação
 RUN apt-get update && apt-get install -y \
@@ -10,10 +10,11 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 COPY package*.json ./
-RUN npm ci --only=production
+# Instalar dependências e recompilar better-sqlite3
+RUN npm ci --only=production && npm rebuild better-sqlite3
 
 # Estágio de produção
-FROM node:18-slim AS production
+FROM node:20-bookworm AS production
 
 # Instalar dependências de runtime
 RUN apt-get update && apt-get install -y \
@@ -28,6 +29,9 @@ WORKDIR /app
 # Copiar dependências do builder
 COPY --from=builder /app/node_modules ./node_modules
 COPY --chown=gpanel:nodejs . .
+
+# Recompilar better-sqlite3 no ambiente de produção
+RUN npm rebuild better-sqlite3
 
 # Criar diretórios necessários
 RUN mkdir -p data logs uploads && chown -R gpanel:nodejs data logs uploads
