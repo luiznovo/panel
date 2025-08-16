@@ -97,4 +97,5 @@ Write-Host "9. Logs dos containers:" -ForegroundColor Yellow
 docker compose logs --tail=20
 
 Write-Host "=== TESTE CONCLUÍDO ===" -ForegroundColor Cyan
-Write-Host "Acesse http://localhost para testar o painel" -ForegroundColor Green
+Write-Host "Acesse http://localhost:8080 para testar o painel" -ForegroundColor Green
+Write-Host "Porta 8080 (HTTP) e 8443 (HTTPS) estão sendo usadas para evitar conflitos" -ForegroundColor Yellow

@@ -1,15 +1,27 @@
 # Multi-stage build para otimização
-FROM node:18-alpine AS builder
+FROM node:18-slim AS builder
+
+# Instalar dependências necessárias para compilação
+RUN apt-get update && apt-get install -y \
+    python3 \
+    make \
+    g++ \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci --only=production
 
 # Estágio de produção
-FROM node:18-alpine AS production
+FROM node:18-slim AS production
 
-RUN addgroup -g 1001 -S nodejs
-RUN adduser -S gpanel -u 1001
+# Instalar dependências de runtime
+RUN apt-get update && apt-get install -y \
+    sqlite3 \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN groupadd -g 1001 nodejs
+RUN useradd -r -u 1001 -g nodejs gpanel
 
 WORKDIR /app
 
