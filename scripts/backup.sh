@@ -1,9 +1,24 @@
 #!/bin/bash
 
-# G-Panel Enterprise Backup Script
-# Backup automático do banco de dados, configurações e código
+# =============================================================================
+# G-PANEL - SCRIPT DE BACKUP AUTOMÁTICO
+# =============================================================================
+# Este script cria backups automáticos do G-Panel incluindo código e banco de dados
+# Uso: ./scripts/backup.sh [tipo]
+# Tipos: manual, daily, weekly, monthly
+# =============================================================================
 
-set -e  # Exit on any error
+set -e
+
+# Configurações
+APP_DIR="/opt/gpanel"
+BACKUP_DIR="/opt/gpanel/backups"
+LOG_FILE="/opt/gpanel/logs/backup.log"
+APP_NAME="gpanel"
+MAX_BACKUPS_DAILY=7
+MAX_BACKUPS_WEEKLY=4
+MAX_BACKUPS_MONTHLY=12
+MAX_BACKUPS_MANUAL=10
 
 # Cores para output
 RED='\033[0;31m'
@@ -12,441 +27,522 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# Configurações
-PANEL_DIR="/opt/g-panel"
-PANEL_USER="g-panel"
-APP_DIR="$PANEL_DIR/app"
-BACKUP_DIR="$PANEL_DIR/backups"
-DATA_DIR="$PANEL_DIR/data"
-LOG_FILE="$PANEL_DIR/logs/backup.log"
-MAX_BACKUPS=30  # Manter 30 backups (1 mês)
-MAX_DAILY_BACKUPS=7  # Manter 7 backups diários
-MAX_WEEKLY_BACKUPS=4  # Manter 4 backups semanais
-MAX_MONTHLY_BACKUPS=12  # Manter 12 backups mensais
-COMPRESSION_LEVEL=6  # Nível de compressão (1-9)
-
-# Configurações de armazenamento remoto (opcional)
-REMOTE_BACKUP_ENABLED=false
-REMOTE_BACKUP_PATH="/remote/backups"
-S3_BUCKET=""  # Para backup no S3
-S3_REGION="us-east-1"
-
-# Funções auxiliares
-log_info() {
-    echo -e "${BLUE}[INFO]${NC} $1" | tee -a $LOG_FILE
+# Função para logging
+log() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE"
 }
 
-log_success() {
-    echo -e "${GREEN}[SUCCESS]${NC} $1" | tee -a $LOG_FILE
+info() {
+    echo -e "${BLUE}[INFO]${NC} $1"
+    log "INFO: $1"
 }
 
-log_warning() {
-    echo -e "${YELLOW}[WARNING]${NC} $1" | tee -a $LOG_FILE
+success() {
+    echo -e "${GREEN}[SUCCESS]${NC} $1"
+    log "SUCCESS: $1"
 }
 
-log_error() {
-    echo -e "${RED}[ERROR]${NC} $1" | tee -a $LOG_FILE
+warning() {
+    echo -e "${YELLOW}[WARNING]${NC} $1"
+    log "WARNING: $1"
 }
 
-get_backup_type() {
-    local day_of_week=$(date +%u)  # 1=Monday, 7=Sunday
-    local day_of_month=$(date +%d)
-    
-    if [[ "$day_of_month" == "01" ]]; then
-        echo "monthly"
-    elif [[ "$day_of_week" == "7" ]]; then  # Sunday
-        echo "weekly"
-    else
-        echo "daily"
+error() {
+    echo -e "${RED}[ERROR]${NC} $1"
+    log "ERROR: $1"
+    exit 1
+}
+
+# Verificar se está rodando como root ou com sudo
+check_permissions() {
+    if [[ $EUID -ne 0 ]] && ! sudo -n true 2>/dev/null; then
+        error "Este script precisa ser executado com privilégios de root ou sudo"
     fi
 }
 
-get_backup_name() {
-    local backup_type=$1
-    local timestamp=$(date +%Y%m%d_%H%M%S)
-    local version=$(cd $APP_DIR && git rev-parse --short HEAD 2>/dev/null || echo "unknown")
-    
-    echo "${backup_type}_${timestamp}_${version}"
-}
-
-check_prerequisites() {
-    log_info "Verificando pré-requisitos..."
-    
-    # Verificar se diretórios existem
+# Verificar se o diretório da aplicação existe
+check_app_directory() {
     if [[ ! -d "$APP_DIR" ]]; then
-        log_error "Diretório da aplicação não encontrado: $APP_DIR"
-        exit 1
-    fi
-    
-    # Criar diretório de backup se não existir
-    mkdir -p $BACKUP_DIR
-    
-    # Verificar espaço em disco
-    local available_space=$(df $BACKUP_DIR | awk 'NR==2 {print $4}')
-    local required_space=1048576  # 1GB em KB
-    
-    if [[ $available_space -lt $required_space ]]; then
-        log_warning "Pouco espaço em disco disponível: $(($available_space/1024))MB"
-    fi
-    
-    log_success "Pré-requisitos verificados"
-}
-
-backup_database() {
-    local backup_path=$1
-    
-    log_info "Fazendo backup do banco de dados..."
-    
-    if [[ -f "$DATA_DIR/database.sqlite" ]]; then
-        # Backup do SQLite com checkpoint para garantir consistência
-        sqlite3 $DATA_DIR/database.sqlite ".backup $backup_path/database.sqlite"
-        
-        # Verificar integridade do backup
-        if sqlite3 $backup_path/database.sqlite "PRAGMA integrity_check;" | grep -q "ok"; then
-            log_success "Backup do banco de dados criado e verificado"
-        else
-            log_error "Backup do banco de dados corrompido"
-            return 1
-        fi
-        
-        # Criar dump SQL como backup adicional
-        sqlite3 $DATA_DIR/database.sqlite ".dump" | gzip > $backup_path/database_dump.sql.gz
-        
-        # Estatísticas do banco
-        local db_size=$(du -h $DATA_DIR/database.sqlite | cut -f1)
-        local table_count=$(sqlite3 $DATA_DIR/database.sqlite "SELECT COUNT(*) FROM sqlite_master WHERE type='table';")
-        
-        echo "Database size: $db_size" >> $backup_path/backup_stats.txt
-        echo "Table count: $table_count" >> $backup_path/backup_stats.txt
-    else
-        log_warning "Banco de dados não encontrado: $DATA_DIR/database.sqlite"
+        error "Diretório da aplicação não encontrado: $APP_DIR"
     fi
 }
 
-backup_application() {
-    local backup_path=$1
+# Criar diretórios necessários
+setup_directories() {
+    mkdir -p "$BACKUP_DIR"
+    mkdir -p "$(dirname "$LOG_FILE")"
     
-    log_info "Fazendo backup da aplicação..."
-    
-    # Backup do código (excluindo node_modules e arquivos temporários)
-    rsync -av --exclude='node_modules' \
-              --exclude='.git' \
-              --exclude='*.log' \
-              --exclude='*.tmp' \
-              --exclude='.env.local' \
-              $APP_DIR/ $backup_path/app/
-    
-    # Backup das configurações
-    if [[ -f "$APP_DIR/.env" ]]; then
-        cp $APP_DIR/.env $backup_path/.env
-    fi
-    
-    # Backup do package.json e package-lock.json
-    cp $APP_DIR/package*.json $backup_path/ 2>/dev/null || true
-    
-    log_success "Backup da aplicação criado"
+    # Definir permissões corretas
+    chmod 755 "$BACKUP_DIR"
+    chmod 755 "$(dirname "$LOG_FILE")"
 }
 
-backup_logs() {
-    local backup_path=$1
+# Obter informações da versão atual
+get_version_info() {
+    local version="unknown"
+    local git_hash="unknown"
+    local git_branch="unknown"
     
-    log_info "Fazendo backup dos logs..."
-    
-    if [[ -d "$PANEL_DIR/logs" ]]; then
-        mkdir -p $backup_path/logs
-        
-        # Backup dos logs dos últimos 7 dias
-        find $PANEL_DIR/logs -name "*.log" -mtime -7 -exec cp {} $backup_path/logs/ \;
-        
-        # Comprimir logs antigos
-        find $backup_path/logs -name "*.log" -exec gzip {} \;
-        
-        log_success "Backup dos logs criado"
+    if [[ -f "$APP_DIR/package.json" ]]; then
+        version=$(cat "$APP_DIR/package.json" | grep '"version"' | cut -d'"' -f4 2>/dev/null || echo "unknown")
     fi
-}
-
-backup_nginx_config() {
-    local backup_path=$1
-    
-    log_info "Fazendo backup das configurações do Nginx..."
-    
-    if [[ -d "$PANEL_DIR/nginx" ]]; then
-        cp -r $PANEL_DIR/nginx $backup_path/
-        log_success "Backup das configurações do Nginx criado"
-    fi
-    
-    # Backup da configuração global do Nginx
-    if [[ -f "/etc/nginx/sites-available/g-panel" ]]; then
-        mkdir -p $backup_path/system_config
-        cp /etc/nginx/sites-available/g-panel $backup_path/system_config/
-    fi
-}
-
-create_backup_metadata() {
-    local backup_path=$1
-    local backup_name=$2
-    local backup_type=$3
-    
-    log_info "Criando metadados do backup..."
-    
-    # Informações do sistema
-    local system_info=$(uname -a)
-    local disk_usage=$(df -h $PANEL_DIR)
-    local memory_info=$(free -h)
-    local git_info="unknown"
     
     if [[ -d "$APP_DIR/.git" ]]; then
-        cd $APP_DIR
-        git_info=$(git log -1 --pretty=format:"%H|%an|%ad|%s" --date=iso)
+        cd "$APP_DIR"
+        git_hash=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+        git_branch=$(git branch --show-current 2>/dev/null || echo "unknown")
     fi
     
-    # Status do PM2
-    local pm2_status="not_available"
-    if command -v pm2 &> /dev/null; then
-        pm2_status=$(pm2 jlist 2>/dev/null || echo "[]")
-    fi
+    echo "$version|$git_hash|$git_branch"
+}
+
+# Criar metadados do backup
+create_metadata() {
+    local backup_type="$1"
+    local backup_path="$2"
+    local version_info=$(get_version_info)
     
-    # Criar arquivo de metadados
-    cat > $backup_path/backup_metadata.json << EOF
+    cat > "$backup_path/backup_metadata.json" << EOF
 {
-  "backup_name": "$backup_name",
   "backup_type": "$backup_type",
-  "timestamp": "$(date -Iseconds)",
+  "created_at": "$(date -Iseconds)",
   "hostname": "$(hostname)",
-  "system_info": "$system_info",
-  "git_info": "$git_info",
-  "pm2_status": $pm2_status,
-  "panel_version": "$(cat $APP_DIR/package.json | jq -r .version 2>/dev/null || echo 'unknown')",
-  "node_version": "$(node --version)",
-  "npm_version": "$(npm --version)",
-  "backup_size": "$(du -sh $backup_path | cut -f1)"
+  "panel_version": "$(echo $version_info | cut -d'|' -f1)",
+  "git_hash": "$(echo $version_info | cut -d'|' -f2)",
+  "git_branch": "$(echo $version_info | cut -d'|' -f3)",
+  "backup_size": "0",
+  "files_count": 0,
+  "database_included": false,
+  "config_included": false
 }
 EOF
-    
-    # Criar checksum dos arquivos importantes
-    find $backup_path -type f \( -name "*.sqlite" -o -name "*.json" -o -name ".env" \) -exec sha256sum {} \; > $backup_path/checksums.txt
-    
-    log_success "Metadados do backup criados"
 }
 
-compress_backup() {
-    local backup_path=$1
-    local backup_name=$2
+# Fazer backup do código da aplicação
+backup_application() {
+    local backup_path="$1"
     
-    log_info "Comprimindo backup..."
+    info "Fazendo backup do código da aplicação..."
     
-    cd $BACKUP_DIR
+    # Criar diretório para a aplicação
+    mkdir -p "$backup_path/app"
     
-    # Comprimir com tar e gzip
-    tar -czf "${backup_name}.tar.gz" -C $backup_path .
+    # Copiar arquivos da aplicação (excluindo node_modules e outros desnecessários)
+    rsync -av \
+        --exclude='node_modules' \
+        --exclude='.git' \
+        --exclude='logs' \
+        --exclude='backups' \
+        --exclude='tmp' \
+        --exclude='*.log' \
+        --exclude='.env.local' \
+        --exclude='.env.development' \
+        "$APP_DIR/" "$backup_path/app/"
     
-    # Verificar integridade do arquivo comprimido
-    if tar -tzf "${backup_name}.tar.gz" > /dev/null 2>&1; then
-        log_success "Backup comprimido com sucesso: ${backup_name}.tar.gz"
+    success "Backup do código concluído"
+}
+
+# Fazer backup do banco de dados
+backup_database() {
+    local backup_path="$1"
+    
+    info "Fazendo backup do banco de dados..."
+    
+    # Verificar se existe banco SQLite
+    if [[ -f "$APP_DIR/data/database.sqlite" ]]; then
+        mkdir -p "$backup_path/data"
+        cp "$APP_DIR/data/database.sqlite" "$backup_path/data/"
+        success "Backup do banco SQLite concluído"
+        return 0
+    fi
+    
+    # Verificar se existe configuração de banco externo
+    if [[ -f "$APP_DIR/.env" ]]; then
+        local db_type=$(grep '^DB_TYPE=' "$APP_DIR/.env" | cut -d'=' -f2 | tr -d '"' || echo "")
         
-        # Remover diretório temporário
-        rm -rf $backup_path
-        
-        # Mostrar tamanho do backup
-        local backup_size=$(du -h "${backup_name}.tar.gz" | cut -f1)
-        log_info "Tamanho do backup: $backup_size"
+        case "$db_type" in
+            "mysql"|"mariadb")
+                backup_mysql "$backup_path"
+                ;;
+            "postgresql"|"postgres")
+                backup_postgresql "$backup_path"
+                ;;
+            "mongodb")
+                backup_mongodb "$backup_path"
+                ;;
+            *)
+                warning "Tipo de banco não identificado ou não suportado: $db_type"
+                ;;
+        esac
     else
-        log_error "Erro na compressão do backup"
+        warning "Arquivo .env não encontrado, pulando backup do banco"
+    fi
+}
+
+# Backup MySQL/MariaDB
+backup_mysql() {
+    local backup_path="$1"
+    
+    if ! command -v mysqldump &> /dev/null; then
+        warning "mysqldump não encontrado, pulando backup MySQL"
         return 1
     fi
+    
+    local db_host=$(grep '^DB_HOST=' "$APP_DIR/.env" | cut -d'=' -f2 | tr -d '"')
+    local db_port=$(grep '^DB_PORT=' "$APP_DIR/.env" | cut -d'=' -f2 | tr -d '"')
+    local db_name=$(grep '^DB_NAME=' "$APP_DIR/.env" | cut -d'=' -f2 | tr -d '"')
+    local db_user=$(grep '^DB_USER=' "$APP_DIR/.env" | cut -d'=' -f2 | tr -d '"')
+    local db_pass=$(grep '^DB_PASS=' "$APP_DIR/.env" | cut -d'=' -f2 | tr -d '"')
+    
+    mkdir -p "$backup_path/data"
+    
+    MYSQL_PWD="$db_pass" mysqldump \
+        -h "${db_host:-localhost}" \
+        -P "${db_port:-3306}" \
+        -u "$db_user" \
+        --single-transaction \
+        --routines \
+        --triggers \
+        "$db_name" > "$backup_path/data/mysql_dump.sql"
+    
+    success "Backup MySQL concluído"
 }
 
-upload_to_remote() {
-    local backup_file=$1
+# Backup PostgreSQL
+backup_postgresql() {
+    local backup_path="$1"
     
-    if [[ "$REMOTE_BACKUP_ENABLED" == "true" ]]; then
-        log_info "Enviando backup para armazenamento remoto..."
-        
-        # Upload para S3 (se configurado)
-        if [[ -n "$S3_BUCKET" ]] && command -v aws &> /dev/null; then
-            aws s3 cp $backup_file s3://$S3_BUCKET/g-panel-backups/ --region $S3_REGION
-            log_success "Backup enviado para S3: s3://$S3_BUCKET/g-panel-backups/$(basename $backup_file)"
-        fi
-        
-        # Upload para servidor remoto via rsync (se configurado)
-        if [[ -n "$REMOTE_BACKUP_PATH" ]]; then
-            rsync -av $backup_file $REMOTE_BACKUP_PATH/
-            log_success "Backup enviado para: $REMOTE_BACKUP_PATH/$(basename $backup_file)"
+    if ! command -v pg_dump &> /dev/null; then
+        warning "pg_dump não encontrado, pulando backup PostgreSQL"
+        return 1
+    fi
+    
+    local db_host=$(grep '^DB_HOST=' "$APP_DIR/.env" | cut -d'=' -f2 | tr -d '"')
+    local db_port=$(grep '^DB_PORT=' "$APP_DIR/.env" | cut -d'=' -f2 | tr -d '"')
+    local db_name=$(grep '^DB_NAME=' "$APP_DIR/.env" | cut -d'=' -f2 | tr -d '"')
+    local db_user=$(grep '^DB_USER=' "$APP_DIR/.env" | cut -d'=' -f2 | tr -d '"')
+    local db_pass=$(grep '^DB_PASS=' "$APP_DIR/.env" | cut -d'=' -f2 | tr -d '"')
+    
+    mkdir -p "$backup_path/data"
+    
+    PGPASSWORD="$db_pass" pg_dump \
+        -h "${db_host:-localhost}" \
+        -p "${db_port:-5432}" \
+        -U "$db_user" \
+        -d "$db_name" \
+        --no-password \
+        --clean \
+        --if-exists > "$backup_path/data/postgresql_dump.sql"
+    
+    success "Backup PostgreSQL concluído"
+}
+
+# Backup MongoDB
+backup_mongodb() {
+    local backup_path="$1"
+    
+    if ! command -v mongodump &> /dev/null; then
+        warning "mongodump não encontrado, pulando backup MongoDB"
+        return 1
+    fi
+    
+    local db_host=$(grep '^DB_HOST=' "$APP_DIR/.env" | cut -d'=' -f2 | tr -d '"')
+    local db_port=$(grep '^DB_PORT=' "$APP_DIR/.env" | cut -d'=' -f2 | tr -d '"')
+    local db_name=$(grep '^DB_NAME=' "$APP_DIR/.env" | cut -d'=' -f2 | tr -d '"')
+    local db_user=$(grep '^DB_USER=' "$APP_DIR/.env" | cut -d'=' -f2 | tr -d '"')
+    local db_pass=$(grep '^DB_PASS=' "$APP_DIR/.env" | cut -d'=' -f2 | tr -d '"')
+    
+    mkdir -p "$backup_path/data"
+    
+    mongodump \
+        --host "${db_host:-localhost}:${db_port:-27017}" \
+        --db "$db_name" \
+        --username "$db_user" \
+        --password "$db_pass" \
+        --out "$backup_path/data/mongodb"
+    
+    success "Backup MongoDB concluído"
+}
+
+# Fazer backup das configurações
+backup_configs() {
+    local backup_path="$1"
+    
+    info "Fazendo backup das configurações..."
+    
+    mkdir -p "$backup_path/config"
+    
+    # Backup do .env
+    if [[ -f "$APP_DIR/.env" ]]; then
+        cp "$APP_DIR/.env" "$backup_path/config/"
+    fi
+    
+    # Backup do ecosystem.config.js
+    if [[ -f "$APP_DIR/ecosystem.config.js" ]]; then
+        cp "$APP_DIR/ecosystem.config.js" "$backup_path/config/"
+    fi
+    
+    # Backup de configurações do Nginx (se existirem)
+    if [[ -f "/etc/nginx/sites-available/gpanel" ]]; then
+        mkdir -p "$backup_path/config/nginx"
+        cp "/etc/nginx/sites-available/gpanel" "$backup_path/config/nginx/"
+    fi
+    
+    # Backup de certificados SSL (se existirem)
+    if [[ -d "/etc/letsencrypt/live" ]]; then
+        local ssl_dir=$(find /etc/letsencrypt/live -name "*gpanel*" -o -name "*panel*" | head -1)
+        if [[ -n "$ssl_dir" ]]; then
+            mkdir -p "$backup_path/config/ssl"
+            cp -r "$ssl_dir" "$backup_path/config/ssl/"
         fi
     fi
+    
+    success "Backup das configurações concluído"
 }
 
+# Compactar backup
+compress_backup() {
+    local backup_name="$1"
+    local backup_path="$2"
+    
+    info "Compactando backup..."
+    
+    cd "$BACKUP_DIR"
+    tar -czf "${backup_name}.tar.gz" "$backup_name"
+    
+    # Calcular tamanho e atualizar metadados
+    local backup_size=$(du -h "${backup_name}.tar.gz" | cut -f1)
+    local files_count=$(find "$backup_name" -type f | wc -l)
+    
+    # Atualizar metadados
+    if [[ -f "$backup_name/backup_metadata.json" ]]; then
+        sed -i "s/\"backup_size\": \"0\"/\"backup_size\": \"$backup_size\"/" "$backup_name/backup_metadata.json"
+        sed -i "s/\"files_count\": 0/\"files_count\": $files_count/" "$backup_name/backup_metadata.json"
+    fi
+    
+    # Remover diretório temporário
+    rm -rf "$backup_name"
+    
+    success "Backup compactado: ${backup_name}.tar.gz ($backup_size)"
+}
+
+# Limpar backups antigos
 cleanup_old_backups() {
-    log_info "Limpando backups antigos..."
+    local backup_type="$1"
+    local max_backups
     
-    cd $BACKUP_DIR
+    case "$backup_type" in
+        "daily")
+            max_backups=$MAX_BACKUPS_DAILY
+            ;;
+        "weekly")
+            max_backups=$MAX_BACKUPS_WEEKLY
+            ;;
+        "monthly")
+            max_backups=$MAX_BACKUPS_MONTHLY
+            ;;
+        "manual")
+            max_backups=$MAX_BACKUPS_MANUAL
+            ;;
+        *)
+            return 0
+            ;;
+    esac
     
-    # Limpar backups diários (manter apenas os últimos N)
-    ls -t daily_*.tar.gz 2>/dev/null | tail -n +$((MAX_DAILY_BACKUPS + 1)) | xargs -r rm -f
+    info "Limpando backups antigos do tipo $backup_type (mantendo $max_backups)..."
     
-    # Limpar backups semanais
-    ls -t weekly_*.tar.gz 2>/dev/null | tail -n +$((MAX_WEEKLY_BACKUPS + 1)) | xargs -r rm -f
+    cd "$BACKUP_DIR"
     
-    # Limpar backups mensais
-    ls -t monthly_*.tar.gz 2>/dev/null | tail -n +$((MAX_MONTHLY_BACKUPS + 1)) | xargs -r rm -f
+    # Listar backups do tipo específico, ordenados por data (mais antigos primeiro)
+    local old_backups=($(ls -t backup_${backup_type}_*.tar.gz 2>/dev/null | tail -n +$((max_backups + 1))))
     
-    # Limpar backups de deploy antigos
-    ls -t backup_*.tar.gz 2>/dev/null | tail -n +$((MAX_BACKUPS + 1)) | xargs -r rm -f
-    
-    log_success "Backups antigos removidos"
+    if [[ ${#old_backups[@]} -gt 0 ]]; then
+        for backup in "${old_backups[@]}"; do
+            rm -f "$backup"
+            info "Backup removido: $backup"
+        done
+        success "${#old_backups[@]} backup(s) antigo(s) removido(s)"
+    else
+        info "Nenhum backup antigo para remover"
+    fi
 }
 
-list_backups() {
-    log_info "=== Backups Disponíveis ==="
+# Verificar espaço em disco
+check_disk_space() {
+    local required_space_mb=1000  # 1GB mínimo
+    local available_space_mb=$(df "$BACKUP_DIR" | awk 'NR==2 {print int($4/1024)}')
     
-    cd $BACKUP_DIR
-    
-    echo "Backups Diários:"
-    ls -lh daily_*.tar.gz 2>/dev/null | awk '{print "  " $9 " (" $5 ", " $6 " " $7 " " $8 ")"}' || echo "  Nenhum backup diário encontrado"
-    
-    echo
-    echo "Backups Semanais:"
-    ls -lh weekly_*.tar.gz 2>/dev/null | awk '{print "  " $9 " (" $5 ", " $6 " " $7 " " $8 ")"}' || echo "  Nenhum backup semanal encontrado"
-    
-    echo
-    echo "Backups Mensais:"
-    ls -lh monthly_*.tar.gz 2>/dev/null | awk '{print "  " $9 " (" $5 ", " $6 " " $7 " " $8 ")"}' || echo "  Nenhum backup mensal encontrado"
-    
-    echo
-    echo "Backups de Deploy:"
-    ls -lh backup_*.tar.gz 2>/dev/null | awk '{print "  " $9 " (" $5 ", " $6 " " $7 " " $8 ")"}' || echo "  Nenhum backup de deploy encontrado"
-    
-    echo
-    local total_size=$(du -sh . 2>/dev/null | cut -f1)
-    echo "Tamanho total dos backups: $total_size"
+    if [[ $available_space_mb -lt $required_space_mb ]]; then
+        warning "Pouco espaço em disco disponível: ${available_space_mb}MB (mínimo: ${required_space_mb}MB)"
+        warning "Considere limpar backups antigos ou aumentar o espaço em disco"
+    else
+        info "Espaço em disco suficiente: ${available_space_mb}MB disponível"
+    fi
 }
 
-verify_backup() {
-    local backup_file=$1
-    
-    log_info "Verificando integridade do backup: $backup_file"
-    
-    if [[ ! -f "$backup_file" ]]; then
-        log_error "Arquivo de backup não encontrado: $backup_file"
-        return 1
-    fi
-    
-    # Verificar integridade do arquivo tar
-    if ! tar -tzf "$backup_file" > /dev/null 2>&1; then
-        log_error "Arquivo de backup corrompido: $backup_file"
-        return 1
-    fi
-    
-    # Extrair e verificar metadados
-    local temp_dir=$(mktemp -d)
-    tar -xzf "$backup_file" -C $temp_dir backup_metadata.json 2>/dev/null || true
-    
-    if [[ -f "$temp_dir/backup_metadata.json" ]]; then
-        local backup_info=$(cat $temp_dir/backup_metadata.json)
-        log_success "Backup válido: $(echo $backup_info | jq -r .backup_name)"
-        echo "  Tipo: $(echo $backup_info | jq -r .backup_type)"
-        echo "  Data: $(echo $backup_info | jq -r .timestamp)"
-        echo "  Versão: $(echo $backup_info | jq -r .panel_version)"
-    fi
-    
-    rm -rf $temp_dir
-    log_success "Verificação concluída"
-}
-
-# Função principal de backup
+# Criar backup
 create_backup() {
-    local backup_type=$(get_backup_type)
-    local backup_name=$(get_backup_name $backup_type)
+    local backup_type="${1:-manual}"
+    
+    info "Iniciando backup do tipo: $backup_type"
+    
+    # Verificar espaço em disco
+    check_disk_space
+    
+    # Gerar nome do backup
+    local timestamp=$(date +%Y%m%d_%H%M%S)
+    local backup_name="backup_${backup_type}_${timestamp}"
     local backup_path="$BACKUP_DIR/$backup_name"
     
-    log_info "=== Iniciando Backup do G-Panel ==="
-    log_info "Tipo: $backup_type"
-    log_info "Nome: $backup_name"
+    # Criar diretório do backup
+    mkdir -p "$backup_path"
     
-    check_prerequisites
+    # Criar metadados
+    create_metadata "$backup_type" "$backup_path"
     
-    # Criar diretório temporário para o backup
-    mkdir -p $backup_path
+    # Fazer backup dos componentes
+    backup_application "$backup_path"
+    backup_database "$backup_path"
+    backup_configs "$backup_path"
     
-    # Executar backups
-    backup_database $backup_path
-    backup_application $backup_path
-    backup_logs $backup_path
-    backup_nginx_config $backup_path
-    create_backup_metadata $backup_path $backup_name $backup_type
+    # Compactar backup
+    compress_backup "$backup_name" "$backup_path"
     
-    # Comprimir backup
-    compress_backup $backup_path $backup_name
+    # Limpar backups antigos
+    cleanup_old_backups "$backup_type"
     
-    # Upload para armazenamento remoto
-    upload_to_remote "$BACKUP_DIR/${backup_name}.tar.gz"
+    success "Backup concluído: $BACKUP_DIR/${backup_name}.tar.gz"
     
-    # Limpeza de backups antigos
-    cleanup_old_backups
-    
-    log_success "=== Backup concluído com sucesso ==="
-    log_info "Arquivo: ${backup_name}.tar.gz"
-    log_info "Localização: $BACKUP_DIR"
+    # Mostrar informações do backup
+    local backup_size=$(du -h "$BACKUP_DIR/${backup_name}.tar.gz" | cut -f1)
+    info "Tamanho do backup: $backup_size"
+    info "Localização: $BACKUP_DIR/${backup_name}.tar.gz"
 }
 
-# Função para mostrar ajuda
-show_help() {
-    echo "G-Panel Backup Script"
+# Listar backups existentes
+list_backups() {
+    info "Backups disponíveis:"
+    
+    if [[ ! -d "$BACKUP_DIR" ]]; then
+        warning "Diretório de backup não encontrado: $BACKUP_DIR"
+        return 1
+    fi
+    
+    cd "$BACKUP_DIR"
+    
+    local backups=($(ls -t backup_*.tar.gz 2>/dev/null))
+    
+    if [[ ${#backups[@]} -eq 0 ]]; then
+        warning "Nenhum backup encontrado"
+        return 1
+    fi
+    
     echo
-    echo "Uso: $0 [comando]"
+    printf "%-5s %-40s %-20s %-10s %-20s\n" "#" "Nome" "Data" "Tamanho" "Tipo"
+    echo "────────────────────────────────────────────────────────────────────────────────────────"
+    
+    for i in "${!backups[@]}"; do
+        local backup_file="${backups[$i]}"
+        local backup_name=$(basename "$backup_file" .tar.gz)
+        local backup_type=$(echo "$backup_name" | cut -d'_' -f2)
+        local file_size=$(du -h "$backup_file" | cut -f1)
+        local file_date=$(stat -c %y "$backup_file" | cut -d' ' -f1,2 | cut -d'.' -f1)
+        
+        printf "%-5s %-40s %-20s %-10s %-20s\n" "$((i+1))" "$backup_name" "$file_date" "$file_size" "$backup_type"
+    done
+    
     echo
-    echo "Comandos:"
-    echo "  create        Criar novo backup"
-    echo "  list          Listar backups disponíveis"
-    echo "  verify <file> Verificar integridade de um backup"
-    echo "  cleanup       Limpar backups antigos"
-    echo "  help          Mostrar esta ajuda"
-    echo
-    echo "Exemplos:"
-    echo "  $0 create"
-    echo "  $0 list"
-    echo "  $0 verify daily_20231201_120000_abc123.tar.gz"
-    echo "  $0 cleanup"
+    info "Total de backups: ${#backups[@]}"
+    
+    # Mostrar uso do espaço
+    local total_size=$(du -sh "$BACKUP_DIR" | cut -f1)
+    info "Espaço total usado: $total_size"
+}
+
+# Verificar integridade de um backup
+verify_backup() {
+    local backup_file="$1"
+    
+    if [[ -z "$backup_file" ]]; then
+        error "Especifique o arquivo de backup para verificar"
+    fi
+    
+    if [[ ! -f "$BACKUP_DIR/$backup_file" ]]; then
+        error "Backup não encontrado: $backup_file"
+    fi
+    
+    info "Verificando integridade do backup: $backup_file"
+    
+    # Verificar se é um arquivo tar.gz válido
+    if tar -tzf "$BACKUP_DIR/$backup_file" &> /dev/null; then
+        success "Backup íntegro: $backup_file"
+        
+        # Mostrar conteúdo
+        info "Conteúdo do backup:"
+        tar -tzf "$BACKUP_DIR/$backup_file" | head -20
+        
+        local file_count=$(tar -tzf "$BACKUP_DIR/$backup_file" | wc -l)
+        if [[ $file_count -gt 20 ]]; then
+            info "... e mais $((file_count - 20)) arquivo(s)"
+        fi
+        
+        info "Total de arquivos: $file_count"
+    else
+        error "Backup corrompido: $backup_file"
+    fi
 }
 
 # Função principal
 main() {
-    # Criar diretório de logs se não existir
-    mkdir -p $(dirname $LOG_FILE)
+    local command="${1:-create}"
+    local backup_type="${2:-manual}"
     
-    # Log do início
-    echo "$(date -Iseconds) - Backup iniciado por $(whoami)" >> $LOG_FILE
+    # Verificações iniciais
+    check_permissions
+    check_app_directory
+    setup_directories
     
-    case "${1:-create}" in
-        "create")
-            create_backup
+    case "$command" in
+        "create"|"")
+            create_backup "$backup_type"
             ;;
         "list")
             list_backups
             ;;
         "verify")
-            if [[ -n "$2" ]]; then
-                verify_backup "$BACKUP_DIR/$2"
-            else
-                log_error "Especifique o arquivo de backup para verificar"
-                exit 1
-            fi
+            verify_backup "$backup_type"
             ;;
         "cleanup")
-            cleanup_old_backups
+            cleanup_old_backups "$backup_type"
             ;;
-        "help"|"--help"|"-h")
-            show_help
+        "help"|"--help"|"--h")
+            echo "Uso: $0 [comando] [tipo/arquivo]"
+            echo
+            echo "Comandos:"
+            echo "  create [tipo]     Criar backup (padrão: manual)"
+            echo "  list              Listar backups disponíveis"
+            echo "  verify <arquivo>  Verificar integridade de um backup"
+            echo "  cleanup <tipo>    Limpar backups antigos de um tipo"
+            echo "  help              Mostrar esta ajuda"
+            echo
+            echo "Tipos de backup:"
+            echo "  manual            Backup manual (padrão)"
+            echo "  daily             Backup diário"
+            echo "  weekly            Backup semanal"
+            echo "  monthly           Backup mensal"
+            echo
+            echo "Exemplos:"
+            echo "  $0                        # Criar backup manual"
+            echo "  $0 create daily           # Criar backup diário"
+            echo "  $0 list                   # Listar backups"
+            echo "  $0 verify backup_file.tar.gz  # Verificar backup"
+            echo "  $0 cleanup daily          # Limpar backups diários antigos"
             ;;
         *)
-            log_error "Comando inválido: $1"
-            show_help
-            exit 1
+            error "Comando inválido: $command"
             ;;
     esac
 }
 
-# Executar se chamado diretamente
-if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
-    main "$@"
-fi
+# Executar função principal
+main "$@"
